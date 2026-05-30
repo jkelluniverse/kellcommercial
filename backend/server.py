@@ -1,0 +1,513 @@
+"""Kell Commercial — FastAPI backend.
+
+Modules:
+- /api/auth/*          — email+password JWT auth
+- /api/properties      — properties (with units sub-collection)
+- /api/tenants, /api/leases
+- /api/rent-status     — current month snapshot powered by Rentec
+- /api/rentec/*        — manual sync, raw fetches
+- /api/payments        — payment history (synced from Rentec + manual entries)
+- /api/tasks, /api/expenses
+- /api/utility-accounts, /api/tenant-applications  (public + admin)
+- /api/documents/*     — Drive search wrapper
+- /api/notifications/* — Gmail email helpers
+"""
+from dotenv import load_dotenv
+from pathlib import Path
+
+load_dotenv(Path(__file__).parent / ".env")
+
+import os
+import logging
+import asyncio
+from datetime import datetime, timezone
+from contextlib import asynccontextmanager
+from typing import Optional
+
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Request, Response, Query, Body
+from fastapi.middleware.cors import CORSMiddleware
+from motor.motor_asyncio import AsyncIOMotorClient
+
+import auth as auth_mod
+import models as M
+import rentec as rentec_mod
+import drive as drive_mod
+import email_svc
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+log = logging.getLogger("kellcommercial")
+
+MONGO_URL = os.environ.get("MONGO_URL")
+DB_NAME = os.environ.get("DB_NAME")
+if not MONGO_URL or not DB_NAME:
+    raise RuntimeError("MONGO_URL and DB_NAME are required")
+
+client: Optional[AsyncIOMotorClient] = None
+db = None
+
+
+async def _seed_users():
+    """Idempotent seed of admin + viewer."""
+    admin_email = os.environ.get("ADMIN_EMAIL", "").lower()
+    admin_pwd = os.environ.get("ADMIN_PASSWORD", "")
+    viewer_email = os.environ.get("VIEWER_EMAIL", "").lower()
+    viewer_pwd = os.environ.get("VIEWER_PASSWORD", "")
+    if not admin_email or not admin_pwd or not viewer_email or not viewer_pwd:
+        log.warning("Seed skipped — admin or viewer credentials missing")
+        return
+    pairs = [
+        (admin_email, admin_pwd, "Jacob Kell", "admin"),
+        (viewer_email, viewer_pwd, "Mike Kell", "viewer"),
+    ]
+    for email, pwd, name, role in pairs:
+        existing = await db.users.find_one({"email": email})
+        hashed = auth_mod.hash_password(pwd)
+        if existing is None:
+            await db.users.insert_one({
+                "email": email,
+                "password_hash": hashed,
+                "name": name,
+                "role": role,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+            log.info("Seeded user: %s (%s)", email, role)
+        elif not auth_mod.verify_password(pwd, existing["password_hash"]):
+            await db.users.update_one({"email": email}, {"$set": {"password_hash": hashed}})
+            log.info("Updated password for: %s", email)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global client, db
+    client = AsyncIOMotorClient(MONGO_URL)
+    db = client[DB_NAME]
+    await db.users.create_index("email", unique=True)
+    await db.properties.create_index("id", unique=True)
+    await db.units.create_index("id", unique=True)
+    await db.tenants.create_index("id", unique=True)
+    await db.leases.create_index("id", unique=True)
+    await db.payments.create_index("id", unique=True)
+    await db.tasks.create_index("id", unique=True)
+    await db.expenses.create_index("id", unique=True)
+    await db.utility_accounts.create_index("id", unique=True)
+    await db.tenant_applications.create_index("id", unique=True)
+    await _seed_users()
+    log.info("Kell Commercial backend ready")
+    yield
+    if client is not None:
+        client.close()
+
+
+app = FastAPI(title="Kell Commercial API", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[os.environ.get("FRONTEND_URL", "http://localhost:3000")],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+api = APIRouter(prefix="/api")
+
+
+# ─── Dependency
+async def current_user(request: Request) -> dict:
+    return await auth_mod.get_current_user(request, db)
+
+
+def admin_only(user: dict = Depends(current_user)) -> dict:
+    auth_mod.require_admin(user)
+    return user
+
+
+def _strip_mongo(doc: dict) -> dict:
+    if not doc:
+        return doc
+    doc.pop("_id", None)
+    return doc
+
+
+# ─── Health
+@api.get("/health")
+async def health():
+    return {
+        "ok": True,
+        "rentec_configured": rentec_mod.has_key(),
+        "drive_configured": drive_mod.is_configured(),
+        "email_configured": email_svc.is_configured(),
+    }
+
+
+# ─── Auth
+@api.post("/auth/login")
+async def login(body: M.LoginBody, response: Response):
+    email = body.email.lower()
+    user = await db.users.find_one({"email": email})
+    if not user or not auth_mod.verify_password(body.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    token = auth_mod.create_access_token(str(user.get("_id", "")), email, user["role"])
+    auth_mod.set_auth_cookie(response, token)
+    return {
+        "user": {
+            "id": str(user.get("_id", "")),
+            "email": email,
+            "name": user["name"],
+            "role": user["role"],
+        },
+        "token": token,
+    }
+
+
+@api.post("/auth/logout")
+async def logout(response: Response, user: dict = Depends(current_user)):
+    auth_mod.clear_auth_cookie(response)
+    return {"ok": True}
+
+
+@api.get("/auth/me")
+async def me(user: dict = Depends(current_user)):
+    return user
+
+
+# ─── Properties
+@api.get("/properties")
+async def list_properties(user: dict = Depends(current_user), q: Optional[str] = None):
+    cursor = db.properties.find()
+    items = [_strip_mongo(p) async for p in cursor]
+    if q:
+        ql = q.lower()
+        items = [p for p in items if ql in (p.get("name", "") + p.get("address", "")).lower()]
+    items.sort(key=lambda p: p.get("name", ""))
+    return items
+
+
+@api.post("/properties")
+async def create_property(body: M.PropertyIn, user: dict = Depends(admin_only)):
+    prop = M.Property(**body.model_dump()).model_dump()
+    await db.properties.insert_one({**prop})
+    return _strip_mongo(prop)
+
+
+@api.get("/properties/{property_id}")
+async def get_property(property_id: str, user: dict = Depends(current_user)):
+    p = await db.properties.find_one({"id": property_id})
+    if not p:
+        raise HTTPException(404, "Property not found")
+    return _strip_mongo(p)
+
+
+@api.put("/properties/{property_id}")
+async def update_property(property_id: str, body: dict = Body(...), user: dict = Depends(admin_only)):
+    body["updated_at"] = datetime.now(timezone.utc).isoformat()
+    res = await db.properties.update_one({"id": property_id}, {"$set": body})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Property not found")
+    p = await db.properties.find_one({"id": property_id})
+    return _strip_mongo(p)
+
+
+@api.delete("/properties/{property_id}")
+async def delete_property(property_id: str, user: dict = Depends(admin_only)):
+    await db.properties.delete_one({"id": property_id})
+    await db.units.delete_many({"property_id": property_id})
+    return {"ok": True}
+
+
+# ─── Units
+@api.get("/properties/{property_id}/units")
+async def list_units(property_id: str, user: dict = Depends(current_user)):
+    cursor = db.units.find({"property_id": property_id})
+    return [_strip_mongo(u) async for u in cursor]
+
+
+@api.post("/properties/{property_id}/units")
+async def create_unit(property_id: str, body: M.UnitIn, user: dict = Depends(admin_only)):
+    payload = body.model_dump()
+    payload["property_id"] = property_id
+    unit = M.Unit(**payload).model_dump()
+    await db.units.insert_one({**unit})
+    return _strip_mongo(unit)
+
+
+@api.delete("/units/{unit_id}")
+async def delete_unit(unit_id: str, user: dict = Depends(admin_only)):
+    await db.units.delete_one({"id": unit_id})
+    return {"ok": True}
+
+
+# ─── Tenants
+@api.get("/tenants")
+async def list_tenants(user: dict = Depends(current_user)):
+    cursor = db.tenants.find()
+    items = [_strip_mongo(t) async for t in cursor]
+    items.sort(key=lambda t: t.get("name", ""))
+    return items
+
+
+@api.post("/tenants")
+async def create_tenant(body: M.TenantIn, user: dict = Depends(admin_only)):
+    t = M.Tenant(**body.model_dump()).model_dump()
+    await db.tenants.insert_one({**t})
+    return _strip_mongo(t)
+
+
+@api.put("/tenants/{tenant_id}")
+async def update_tenant(tenant_id: str, body: dict = Body(...), user: dict = Depends(admin_only)):
+    await db.tenants.update_one({"id": tenant_id}, {"$set": body})
+    t = await db.tenants.find_one({"id": tenant_id})
+    if not t:
+        raise HTTPException(404, "Tenant not found")
+    return _strip_mongo(t)
+
+
+@api.delete("/tenants/{tenant_id}")
+async def delete_tenant(tenant_id: str, user: dict = Depends(admin_only)):
+    await db.tenants.delete_one({"id": tenant_id})
+    return {"ok": True}
+
+
+# ─── Leases
+@api.get("/leases")
+async def list_leases(user: dict = Depends(current_user)):
+    cursor = db.leases.find()
+    return [_strip_mongo(l) async for l in cursor]
+
+
+@api.post("/leases")
+async def create_lease(body: M.LeaseIn, user: dict = Depends(admin_only)):
+    l = M.Lease(**body.model_dump()).model_dump()
+    await db.leases.insert_one({**l})
+    return _strip_mongo(l)
+
+
+@api.delete("/leases/{lease_id}")
+async def delete_lease(lease_id: str, user: dict = Depends(admin_only)):
+    await db.leases.delete_one({"id": lease_id})
+    return {"ok": True}
+
+
+# ─── Tasks
+@api.get("/tasks")
+async def list_tasks(user: dict = Depends(current_user)):
+    cursor = db.tasks.find()
+    items = [_strip_mongo(t) async for t in cursor]
+    items.sort(key=lambda t: t.get("created_at", ""), reverse=True)
+    return items
+
+
+@api.post("/tasks")
+async def create_task(body: M.TaskIn, user: dict = Depends(admin_only)):
+    t = M.Task(**body.model_dump()).model_dump()
+    await db.tasks.insert_one({**t})
+    return _strip_mongo(t)
+
+
+@api.put("/tasks/{task_id}")
+async def update_task(task_id: str, body: dict = Body(...), user: dict = Depends(admin_only)):
+    body["updated_at"] = datetime.now(timezone.utc).isoformat()
+    if body.get("status") == "done" and "completed_at" not in body:
+        body["completed_at"] = body["updated_at"]
+    await db.tasks.update_one({"id": task_id}, {"$set": body})
+    t = await db.tasks.find_one({"id": task_id})
+    return _strip_mongo(t) if t else None
+
+
+@api.delete("/tasks/{task_id}")
+async def delete_task(task_id: str, user: dict = Depends(admin_only)):
+    await db.tasks.delete_one({"id": task_id})
+    return {"ok": True}
+
+
+# ─── Expenses
+@api.get("/expenses")
+async def list_expenses(user: dict = Depends(current_user)):
+    cursor = db.expenses.find()
+    items = [_strip_mongo(e) async for e in cursor]
+    items.sort(key=lambda e: e.get("expense_date", ""), reverse=True)
+    return items
+
+
+@api.post("/expenses")
+async def create_expense(body: M.ExpenseIn, user: dict = Depends(admin_only)):
+    e = M.Expense(submitted_by=user["email"], **body.model_dump()).model_dump()
+    await db.expenses.insert_one({**e})
+    return _strip_mongo(e)
+
+
+@api.delete("/expenses/{expense_id}")
+async def delete_expense(expense_id: str, user: dict = Depends(admin_only)):
+    await db.expenses.delete_one({"id": expense_id})
+    return {"ok": True}
+
+
+# ─── Utility accounts (public submission + admin list)
+@api.post("/public/utility-accounts")
+async def public_utility(body: M.UtilityAccountIn):
+    a = M.UtilityAccount(**body.model_dump()).model_dump()
+    await db.utility_accounts.insert_one({**a})
+    return {"ok": True, "id": a["id"]}
+
+
+@api.get("/utility-accounts")
+async def list_utility(user: dict = Depends(current_user)):
+    cursor = db.utility_accounts.find()
+    items = [_strip_mongo(u) async for u in cursor]
+    items.sort(key=lambda u: u.get("created_at", ""), reverse=True)
+    return items
+
+
+# ─── Tenant applications (public + admin)
+@api.post("/public/tenant-applications")
+async def public_application(body: M.TenantApplicationIn):
+    a = M.TenantApplication(**body.model_dump()).model_dump()
+    await db.tenant_applications.insert_one({**a})
+    return {"ok": True, "id": a["id"]}
+
+
+@api.get("/tenant-applications")
+async def list_applications(user: dict = Depends(current_user)):
+    cursor = db.tenant_applications.find()
+    items = [_strip_mongo(a) async for a in cursor]
+    items.sort(key=lambda a: a.get("created_at", ""), reverse=True)
+    return items
+
+
+@api.put("/tenant-applications/{app_id}")
+async def update_application(app_id: str, body: dict = Body(...), user: dict = Depends(admin_only)):
+    await db.tenant_applications.update_one({"id": app_id}, {"$set": body})
+    a = await db.tenant_applications.find_one({"id": app_id})
+    return _strip_mongo(a) if a else None
+
+
+# ─── Payments (combined: local + Rentec snapshot)
+@api.get("/payments")
+async def list_payments(user: dict = Depends(current_user)):
+    cursor = db.payments.find()
+    items = [_strip_mongo(p) async for p in cursor]
+    items.sort(key=lambda p: p.get("date", ""), reverse=True)
+    return items
+
+
+@api.post("/payments")
+async def add_payment(body: dict = Body(...), user: dict = Depends(admin_only)):
+    p = M.PaymentRecord(**body).model_dump()
+    await db.payments.insert_one({**p})
+    # Fire notification (best-effort)
+    if email_svc.is_configured():
+        admin = os.environ.get("ADMIN_EMAIL", "")
+        viewer = os.environ.get("VIEWER_EMAIL", "")
+        recipients = [r for r in [admin, viewer] if r]
+        asyncio.create_task(email_svc.send_payment_received(
+            recipients,
+            p.get("tenant_name") or "Tenant",
+            p.get("property_address") or "",
+            float(p["amount"]),
+            p["date"],
+        ))
+    return _strip_mongo(p)
+
+
+# ─── Rentec sync + status
+@api.get("/rentec/status")
+async def rentec_status(user: dict = Depends(current_user)):
+    return await rentec_mod.check_connection()
+
+
+@api.post("/rentec/sync")
+async def rentec_sync(user: dict = Depends(admin_only), force: bool = True):
+    """Pull from Rentec and cache the latest snapshot into Mongo for fast UI access."""
+    summary = await rentec_mod.sync_all(force=force)
+    # Cache the latest snapshot under a singleton key
+    await db.rentec_snapshot.update_one(
+        {"_singleton": True},
+        {"$set": {**summary, "_singleton": True}},
+        upsert=True,
+    )
+    return {"counts": summary["counts"], "synced_at": summary["synced_at"], "configured": summary["configured"]}
+
+
+@api.get("/rentec/snapshot")
+async def rentec_snapshot(user: dict = Depends(current_user)):
+    snap = await db.rentec_snapshot.find_one({"_singleton": True})
+    if not snap:
+        return {"properties": [], "units": [], "tenants": [], "leases": [], "payments": [], "counts": {"properties": 0, "units": 0, "tenants": 0, "leases": 0, "payments": 0}, "synced_at": None, "configured": rentec_mod.has_key()}
+    snap.pop("_id", None)
+    snap.pop("_singleton", None)
+    return snap
+
+
+# ─── Rent status — current month summary
+@api.get("/rent-status/summary")
+async def rent_status_summary(user: dict = Depends(current_user)):
+    """Builds a current-month summary from the Rentec snapshot (or empty)."""
+    snap = await db.rentec_snapshot.find_one({"_singleton": True}) or {}
+    leases = snap.get("leases", [])
+    payments = snap.get("payments", [])
+
+    now = datetime.now(timezone.utc)
+    month, year = now.month, now.year
+
+    # Sum expected
+    total_expected = 0.0
+    for l in leases:
+        if isinstance(l, dict):
+            for k in ("monthlyRent", "totalRecurringRent", "monthly_rent"):
+                v = l.get(k)
+                if isinstance(v, (int, float)):
+                    total_expected += float(v)
+                    break
+
+    total_collected = 0.0
+    paid_count = 0
+    for p in payments:
+        if isinstance(p, dict):
+            date_str = p.get("date") or p.get("paymentDate") or ""
+            if date_str.startswith(f"{year}-{month:02d}"):
+                amt = p.get("amount") or p.get("amountReceived") or 0
+                if isinstance(amt, (int, float)):
+                    total_collected += float(amt)
+                    paid_count += 1
+
+    collection_rate = round((total_collected / total_expected) * 100, 1) if total_expected > 0 else 0.0
+
+    return {
+        "month": month,
+        "year": year,
+        "total_expected": round(total_expected, 2),
+        "total_collected": round(total_collected, 2),
+        "collection_rate": collection_rate,
+        "paid_count": paid_count,
+        "lease_count": len(leases),
+        "synced_at": snap.get("synced_at"),
+        "configured": rentec_mod.has_key(),
+    }
+
+
+# ─── Documents (Drive search)
+@api.get("/documents/search")
+async def documents_search(q: str = Query(..., min_length=2), user: dict = Depends(current_user)):
+    return drive_mod.search(q, max_results=30)
+
+
+@api.get("/documents/root")
+async def documents_root(user: dict = Depends(current_user)):
+    return drive_mod.list_root()
+
+
+# ─── Notifications test
+@api.post("/notifications/test")
+async def notif_test(user: dict = Depends(admin_only)):
+    ok = await email_svc.send_email(
+        [user["email"]],
+        "Kell Commercial — test notification",
+        email_svc._wrap("<p>This is a test notification. If you received this, Gmail SMTP is working.</p>"),
+    )
+    return {"sent": ok, "configured": email_svc.is_configured()}
+
+
+app.include_router(api)
+
+
+@app.get("/")
+async def root():
+    return {"app": "Kell Commercial", "ok": True}
