@@ -27,10 +27,10 @@ export function Layout({ children }) {
   React.useEffect(() => { setOpen(false); }, [loc.pathname]);
 
   return (
-    <div className="min-h-screen flex bg-ink-950 relative">
+    <div className="min-h-screen flex bg-white relative">
       {/* Mobile top bar */}
-      <header className="md:hidden fixed top-0 inset-x-0 z-30 bg-ink-900 border-b border-ink-600 flex items-center justify-between px-4 h-14">
-        <button data-testid="mobile-menu-toggle" onClick={() => setOpen(!open)} className="text-bone-100">
+      <header className="md:hidden fixed top-0 inset-x-0 z-30 bg-white border-b border-ink-600 flex items-center justify-between px-4 h-14">
+        <button data-testid="mobile-menu-toggle" onClick={() => setOpen(!open)} className="text-crimson-600">
           {open ? <X size={22} /> : <Menu size={22} />}
         </button>
         <div className="flex items-center gap-2">
@@ -43,7 +43,7 @@ export function Layout({ children }) {
       {/* Sidebar */}
       <aside
         data-testid="sidebar"
-        className={`fixed md:static top-0 left-0 h-screen md:h-auto md:min-h-screen w-72 bg-ink-900 border-r border-ink-600 z-40 transform transition-transform md:translate-x-0 ${
+        className={`fixed md:static top-0 left-0 h-screen md:h-auto md:min-h-screen w-72 bg-ink-800 border-r border-ink-600 z-40 transform transition-transform md:translate-x-0 ${
           open ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         }`}
       >
@@ -55,7 +55,7 @@ export function Layout({ children }) {
               <div className="brand-sub mt-0.5">EST. 1978</div>
             </div>
           </div>
-          <div className="mt-4 text-[10px] tracking-[0.3em] text-ink-500 uppercase">Commercial · Asset Manager</div>
+          <div className="mt-4 text-[10px] tracking-[0.3em] text-bone-300 uppercase">Commercial · Asset Manager</div>
         </div>
 
         <nav className="px-3 py-4 space-y-0.5">
@@ -82,15 +82,15 @@ export function Layout({ children }) {
         <div className="absolute md:relative bottom-0 inset-x-0 p-4 border-t border-ink-600">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-[11px] text-bone-300">{user?.name}</div>
+              <div className="text-[11px] text-bone-100 font-semibold">{user?.name}</div>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <ShieldCheck size={11} className={isAdmin ? "text-crimson-500" : "text-gold-500"} />
-                <span className="text-[10px] tracking-[0.2em] uppercase text-ink-500">
+                <ShieldCheck size={11} className={isAdmin ? "text-crimson-600" : "text-gold-600"} />
+                <span className="text-[10px] tracking-[0.2em] uppercase text-bone-300">
                   {isAdmin ? "Administrator" : "View only"}
                 </span>
               </div>
             </div>
-            <button data-testid="logout-btn" onClick={logout} className="text-ink-500 hover:text-crimson-500 transition-colors">
+            <button data-testid="logout-btn" onClick={logout} className="text-bone-300 hover:text-crimson-600 transition-colors">
               <LogOut size={16} />
             </button>
           </div>

@@ -1,13 +1,43 @@
-/** @type {import('tailwindcss').Config} */
+/** @type {import('tailwindcss').Config}
+ *  Light-mode rebrand: white background, red titles, black body, gold accents.
+ *  Token map kept the same name space so existing class usage flips palette
+ *  without page-level rewrites.
+ *   ink-*  → white / bone / warm gray scales (surfaces + borders + muted)
+ *   bone-* → black / dark gray scales (text)
+ *   crimson-* → titles, primary actions
+ *   gold-*    → accents, eyebrows, hover state
+ */
 module.exports = {
   content: ["./src/**/*.{js,jsx,ts,tsx}", "./public/index.html"],
   theme: {
     extend: {
       colors: {
-        ink: { 950: "#070707", 900: "#0a0a0a", 800: "#141414", 700: "#1f1f1f", 600: "#2a2a2a", 500: "#3a3a3a" },
-        crimson: { 600: "#b91c1c", 700: "#991616", 800: "#7f1010", 500: "#c92828" },
-        gold: { 400: "#d4b773", 500: "#c9a961", 600: "#b09453" },
-        bone: { 100: "#f5f1ea", 200: "#e6dccb", 300: "#cfc1a8" },
+        // Surfaces (was dark) → now light
+        ink: {
+          950: "#ffffff", // page bg deepest
+          900: "#ffffff", // page bg
+          800: "#faf7f0", // panel bg (warm bone)
+          700: "#f3ecdc", // raised
+          600: "#e5dcc4", // border default
+          500: "#a89e8c", // muted text / icons
+        },
+        // Text (was light) → now dark
+        bone: {
+          100: "#0a0a0a", // primary text (was bright)
+          200: "#1a1a1a",
+          300: "#3d3d3d", // secondary text
+        },
+        crimson: {
+          500: "#c92828",
+          600: "#b91c1c", // primary
+          700: "#991616",
+          800: "#7f1010",
+        },
+        gold: {
+          400: "#d4b773",
+          500: "#c9a961",
+          600: "#a98a3f",
+        },
       },
       fontFamily: {
         display: ["'Oswald'", "Impact", "Arial Black", "sans-serif"],
@@ -16,7 +46,8 @@ module.exports = {
       },
       letterSpacing: { hero: "0.2em", brand: "0.35em" },
       boxShadow: {
-        glow: "0 0 0 1px rgba(185,28,28,0.35), 0 24px 60px -25px rgba(185,28,28,0.45)",
+        glow: "0 0 0 1px rgba(185,28,28,0.15), 0 24px 60px -28px rgba(185,28,28,0.30)",
+        soft: "0 1px 2px rgba(0,0,0,0.04), 0 8px 24px -12px rgba(0,0,0,0.08)",
       },
     },
   },

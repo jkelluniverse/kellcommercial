@@ -29,11 +29,11 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-ink-950 via-ink-900 to-ink-950" />
-      <div className="absolute inset-0 opacity-30 pointer-events-none"
+      <div className="absolute inset-0 bg-white" />
+      <div className="absolute inset-0 opacity-60 pointer-events-none"
         style={{
           backgroundImage:
-            "radial-gradient(circle at 20% 80%, rgba(185,28,28,0.15) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(201,169,97,0.08) 0%, transparent 50%)",
+            "radial-gradient(circle at 20% 80%, rgba(185,28,28,0.06) 0%, transparent 55%), radial-gradient(circle at 80% 20%, rgba(201,169,97,0.18) 0%, transparent 55%)",
         }}
       />
 
@@ -46,8 +46,8 @@ export default function Login() {
 
         <form data-testid="login-form" onSubmit={submit} className="panel-hot p-7 space-y-5">
           <div className="text-center mb-1">
-            <div className="font-display tracking-wider uppercase text-xs text-gold-500">Asset Manager</div>
-            <div className="text-bone-200 text-sm mt-1">Sign in to continue</div>
+            <div className="font-display tracking-wider uppercase text-xs text-gold-600">Asset Manager</div>
+            <div className="text-bone-300 text-sm mt-1">Sign in to continue</div>
           </div>
 
           <div>

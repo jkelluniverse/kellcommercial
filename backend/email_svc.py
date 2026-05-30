@@ -46,16 +46,16 @@ async def send_email(to: list[str], subject: str, html: str, text: str = "") -> 
 
 def _wrap(content_html: str) -> str:
     return f"""\
-<div style="font-family:-apple-system,Segoe UI,sans-serif;background:#0a0a0a;padding:24px;">
-  <div style="max-width:560px;margin:0 auto;background:#141414;border:1px solid #b91c1c;border-radius:6px;overflow:hidden;">
-    <div style="padding:18px 24px;border-bottom:1px solid #2a2a2a;background:#0a0a0a;">
-      <div style="color:#b91c1c;font-weight:800;font-size:20px;letter-spacing:2px;">KELL COMMERCIAL</div>
-      <div style="color:#c9a961;font-size:11px;letter-spacing:3px;">EST. 1978</div>
+<div style="font-family:-apple-system,Segoe UI,sans-serif;background:#ffffff;padding:24px;">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border:2px solid #b91c1c;border-radius:6px;overflow:hidden;">
+    <div style="padding:18px 24px;border-bottom:1px solid #e5dcc4;background:#ffffff;">
+      <div style="color:#b91c1c;font-weight:800;font-size:22px;letter-spacing:2px;">KELL COMMERCIAL</div>
+      <div style="color:#a98a3f;font-size:11px;letter-spacing:3px;">EST. 1978</div>
     </div>
-    <div style="padding:24px;color:#e5e5e5;line-height:1.55;">
+    <div style="padding:24px;color:#0a0a0a;line-height:1.55;">
       {content_html}
     </div>
-    <div style="padding:14px 24px;border-top:1px solid #2a2a2a;color:#6b6b6b;font-size:11px;">
+    <div style="padding:14px 24px;border-top:1px solid #e5dcc4;color:#a89e8c;font-size:11px;">
       Automated notification · Kell Commercial Asset Management
     </div>
   </div>
@@ -64,8 +64,8 @@ def _wrap(content_html: str) -> str:
 
 async def send_payment_received(to: list[str], tenant: str, address: str, amount: float, paid_on: str) -> bool:
     html = _wrap(
-        f"<h2 style='color:#fff;margin:0 0 12px;'>Payment received</h2>"
-        f"<p><strong style='color:#c9a961;'>{tenant}</strong> &mdash; {address}</p>"
+        f"<h2 style='color:#b91c1c;margin:0 0 12px;'>Payment received</h2>"
+        f"<p><strong style='color:#a98a3f;'>{tenant}</strong> &mdash; {address}</p>"
         f"<p>Amount: <strong>${amount:,.2f}</strong><br/>Received: {paid_on}</p>"
     )
     return await send_email(to, f"Payment received — {address}", html)
@@ -73,8 +73,8 @@ async def send_payment_received(to: list[str], tenant: str, address: str, amount
 
 async def send_payment_overdue(to: list[str], tenant: str, address: str, amount_due: float, days_overdue: int) -> bool:
     html = _wrap(
-        f"<h2 style='color:#fff;margin:0 0 12px;'>Payment overdue</h2>"
-        f"<p><strong style='color:#c9a961;'>{tenant}</strong> &mdash; {address}</p>"
+        f"<h2 style='color:#b91c1c;margin:0 0 12px;'>Payment overdue</h2>"
+        f"<p><strong style='color:#a98a3f;'>{tenant}</strong> &mdash; {address}</p>"
         f"<p>Outstanding: <strong>${amount_due:,.2f}</strong><br/>Days past due: <strong>{days_overdue}</strong></p>"
     )
     return await send_email(to, f"Payment overdue — {address}", html)
