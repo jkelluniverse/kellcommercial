@@ -1,6 +1,7 @@
 # Railway build configuration — single-service deployment.
-# Builds the React frontend, installs Python deps, and runs FastAPI which
-# serves both /api/* and the React app from one process.
+# Builds the React frontend into static files, installs Python deps inside a
+# virtualenv (Nix's Python is immutable, so pip must go in a venv), and runs
+# FastAPI which serves both /api/* and the React app from one process.
 
 [phases.setup]
 nixPkgs = ["python311", "nodejs_20", "gcc"]
@@ -8,9 +9,9 @@ nixPkgs = ["python311", "nodejs_20", "gcc"]
 [phases.install]
 cmds = [
   "cd frontend && npm install --legacy-peer-deps",
-  "python3 -m ensurepip --upgrade || true",
-  "python3 -m pip install --upgrade pip --break-system-packages",
-  "python3 -m pip install -r backend/requirements.txt --break-system-packages",
+  "python3 -m venv /opt/venv",
+  "/opt/venv/bin/pip install --upgrade pip",
+  "/opt/venv/bin/pip install -r backend/requirements.txt",
 ]
 
 [phases.build]
@@ -19,4 +20,4 @@ cmds = [
 ]
 
 [start]
-cmd = "cd backend && python3 -m uvicorn server:app --host 0.0.0.0 --port $PORT"
+cmd = "cd backend && /opt/venv/bin/uvicorn server:app --host 0.0.0.0 --port $PORT"
