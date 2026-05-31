@@ -1,7 +1,6 @@
 # Railway build configuration — single-service deployment.
-# Builds the React frontend into static files, installs Python deps inside a
-# virtualenv (Nix's Python is immutable, so pip must go in a venv), and runs
-# FastAPI which serves both /api/* and the React app from one process.
+# Builds the React frontend with REACT_APP_BACKEND_URL forced to empty so
+# the JS uses relative `/api/*` URLs (same origin as the FastAPI host).
 
 [phases.setup]
 nixPkgs = ["python311", "nodejs_20", "gcc"]
@@ -16,7 +15,7 @@ cmds = [
 
 [phases.build]
 cmds = [
-  "cd frontend && CI=false npm run build",
+  "cd frontend && CI=false REACT_APP_BACKEND_URL= npm run build",
 ]
 
 [start]
