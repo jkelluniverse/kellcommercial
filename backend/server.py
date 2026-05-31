@@ -100,15 +100,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Kell Commercial API", lifespan=lifespan)
 
-# CORS — kept permissive since frontend + backend are now same-origin.
-# Allowing localhost for dev convenience.
+# CORS is essentially a no-op for same-origin (frontend served from same host
+# as the API). We keep it permissive to avoid any preflight edge cases during
+# local dev. allow_credentials=False because we use Bearer-token auth, not
+# cookies — that lets us safely use a wildcard origin.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        os.environ.get("FRONTEND_URL", "http://localhost:3000"),
-        "http://localhost:3000",
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

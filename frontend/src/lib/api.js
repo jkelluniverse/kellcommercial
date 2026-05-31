@@ -1,10 +1,14 @@
 import axios from "axios";
 
-const API_BASE = `${process.env.REACT_APP_BACKEND_URL || ""}/api`;
+// Always use a relative /api path. The frontend is served from the same
+// origin as the FastAPI backend on Railway (single-service deployment),
+// so /api resolves to the correct backend regardless of host or env vars.
+const API_BASE = "/api";
 
 export const api = axios.create({
   baseURL: API_BASE,
-  withCredentials: true,
+  // withCredentials intentionally OFF — we authenticate via Bearer header
+  // (token in localStorage), which avoids any CORS preflight credential checks.
 });
 
 api.interceptors.request.use((config) => {
