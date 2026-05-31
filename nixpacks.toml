@@ -1,10 +1,9 @@
 # Railway build configuration — single-service deployment.
 # Builds the React frontend, installs Python deps, and runs FastAPI which
-# serves both /api/* and the React app from one process. Same pattern as
-# the NCH Asset-Manager: one repo -> one service -> one domain.
+# serves both /api/* and the React app from one process.
 
 [phases.setup]
-nixPkgs = ["python311", "nodejs_22", "gcc"]
+nixPkgs = ["python311", "nodejs_20", "gcc"]
 
 [phases.install]
 cmds = [
