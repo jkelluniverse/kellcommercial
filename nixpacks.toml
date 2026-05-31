@@ -1,0 +1,22 @@
+# Railway build configuration — single-service deployment.
+# Builds the React frontend, installs Python deps, and runs FastAPI which
+# serves both /api/* and the React app from one process. Same pattern as
+# the NCH Asset-Manager: one repo -> one service -> one domain.
+
+[phases.setup]
+nixPkgs = ["python311", "nodejs_22", "gcc"]
+
+[phases.install]
+cmds = [
+  "cd frontend && npm install --legacy-peer-deps",
+  "pip install --upgrade pip",
+  "pip install -r backend/requirements.txt",
+]
+
+[phases.build]
+cmds = [
+  "cd frontend && CI=false npm run build",
+]
+
+[start]
+cmd = "cd backend && uvicorn server:app --host 0.0.0.0 --port $PORT"

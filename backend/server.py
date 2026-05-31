@@ -99,9 +99,15 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Kell Commercial API", lifespan=lifespan)
+
+# CORS — kept permissive since frontend + backend are now same-origin.
+# Allowing localhost for dev convenience.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.environ.get("FRONTEND_URL", "http://localhost:3000")],
+    allow_origins=[
+        os.environ.get("FRONTEND_URL", "http://localhost:3000"),
+        "http://localhost:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -508,6 +514,39 @@ async def notif_test(user: dict = Depends(admin_only)):
 app.include_router(api)
 
 
-@app.get("/")
-async def root():
-    return {"app": "Kell Commercial", "ok": True}
+# ─── Serve the React build (single-service deployment, like the NCH app) ───
+# In production, Railway builds the frontend (`frontend/build/`) and the
+# FastAPI process serves it alongside `/api/*`. No separate frontend service.
+from pathlib import Path as _Path
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, JSONResponse
+
+_FRONTEND_BUILD = _Path(__file__).parent.parent / "frontend" / "build"
+
+if _FRONTEND_BUILD.exists() and (_FRONTEND_BUILD / "index.html").exists():
+    # Static assets (JS, CSS, images): served at /static/*
+    app.mount(
+        "/static",
+        StaticFiles(directory=_FRONTEND_BUILD / "static"),
+        name="static",
+    )
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
+        # Don't intercept /api/* (handled by the router above)
+        if full_path.startswith("api/") or full_path == "api":
+            return JSONResponse({"detail": "Not found"}, status_code=404)
+        # Serve specific static files at the root (favicon, manifest, etc.)
+        target = _FRONTEND_BUILD / full_path
+        if full_path and target.is_file():
+            return FileResponse(target)
+        # SPA fallback — let React Router handle the route
+        return FileResponse(_FRONTEND_BUILD / "index.html")
+else:
+    log.warning(
+        "Frontend build not found at %s — running API-only mode", _FRONTEND_BUILD
+    )
+
+    @app.get("/")
+    async def root():
+        return {"app": "Kell Commercial", "ok": True, "mode": "api-only"}
