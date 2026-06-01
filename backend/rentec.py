@@ -1,9 +1,12 @@
-"""Rentec Direct REST/JSON API client with 5-minute caching.
+"""Rentec Direct Open API V3 client.
 
-Token format from user: a JWT-like base64 payload — sent in the
-Authorization header as: `Authorization: <token>` per Rentec V3 API.
-We try Bearer scheme first; on 401 we fall back to raw token.
-Returns None on failure so callers can fall back gracefully.
+Spec: https://secure.rentecdirect.com/api/v3/docs/
+- Auth: X-API-Key: <token>  (primary), Bearer also accepted
+- Base: https://secure.rentecdirect.com/api/v3
+- Response envelope: { "summary": {...}, "data": [...] | {...} }
+- Units are subunits of properties (use ?include_subunits=true on /properties)
+- /transactions is the rent/ledger endpoint (paginated, 300/page)
+- Other list endpoints (/properties, /tenants, /leases) return all rows
 """
 import os
 import time
@@ -15,20 +18,21 @@ import httpx
 logger = logging.getLogger("rentec")
 
 CACHE_TTL = 300.0  # 5 minutes
-REQUEST_TIMEOUT = 15.0
-MAX_PAGES = 25
-PAGE_SIZE = 100
+REQUEST_TIMEOUT = 20.0
+MAX_TX_PAGES = 50
 
 _cache: dict[str, tuple[float, Any]] = {}
 
 
 def _api_key() -> Optional[str]:
-    k = os.environ.get("RENTEC_API_KEY") or ""
-    return k if k else None
+    k = (os.environ.get("RENTEC_API_KEY") or "").strip()
+    return k or None
 
 
 def _base_url() -> str:
-    return os.environ.get("RENTEC_BASE_URL", "https://secure.rentecdirect.com/api/v1").rstrip("/")
+    return os.environ.get(
+        "RENTEC_BASE_URL", "https://secure.rentecdirect.com/api/v3"
+    ).rstrip("/")
 
 
 def has_key() -> bool:
@@ -39,111 +43,102 @@ def clear_cache() -> None:
     _cache.clear()
 
 
-async def _request(path: str, params: Optional[dict] = None) -> Optional[Any]:
+async def _request(path: str, params: Optional[dict] = None) -> Optional[dict]:
     key = _api_key()
     if not key:
         return None
     url = f"{_base_url()}{path}"
-    headers_variants = [
-        {"Authorization": f"Bearer {key}", "Accept": "application/json"},
-        {"Authorization": key, "Accept": "application/json"},
-        {"x-api-key": key, "Accept": "application/json"},
-    ]
-    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
-        last_err = None
-        for headers in headers_variants:
-            try:
-                r = await client.get(url, headers=headers, params=params or {})
-                if r.status_code == 401 or r.status_code == 403:
-                    last_err = f"{r.status_code} {r.text[:120]}"
-                    continue
-                if not r.is_success:
-                    logger.warning("Rentec %s %s -> %s", path, params, r.status_code)
-                    return None
-                ct = r.headers.get("content-type", "")
-                if "json" not in ct:
-                    logger.warning("Rentec %s non-JSON content-type %s", path, ct)
-                    return None
-                return r.json()
-            except httpx.HTTPError as e:
-                logger.error("Rentec request error %s: %s", path, e)
-                last_err = str(e)
-                return None
-        logger.warning("Rentec %s auth failed all schemes: %s", path, last_err)
+    headers = {
+        "X-API-Key": key,
+        "Authorization": f"Bearer {key}",  # both, just in case
+        "Accept": "application/json",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+            r = await client.get(url, headers=headers, params=params or {})
+        if not r.is_success:
+            logger.warning("Rentec %s %s -> %s %s", path, params, r.status_code, r.text[:150])
+            return None
+        return r.json()
+    except httpx.HTTPError as e:
+        logger.error("Rentec %s error: %s", path, e)
         return None
 
 
-async def _list(resource_path: str) -> list[dict]:
-    """Fetch all paginated results for a Rentec list resource.
+def _unwrap(body: Optional[dict]) -> list[dict]:
+    """Extract `data` array from the Rentec summary+data envelope."""
+    if not body or not isinstance(body, dict):
+        return []
+    data = body.get("data")
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        return [data]
+    return []
 
-    Returns [] on any error or when no key configured.
-    """
-    cached = _cache.get(resource_path)
+
+async def _cached_list(cache_key: str, path: str, params: dict) -> list[dict]:
+    cached = _cache.get(cache_key)
     if cached and (time.time() - cached[0]) < CACHE_TTL:
         return cached[1]
-
-    all_items: list[dict] = []
-    for page in range(1, MAX_PAGES + 1):
-        body = await _request(resource_path, {"page": page, "pageSize": PAGE_SIZE})
-        if body is None:
-            return []
-        # Rentec response shape varies; try common keys
-        items = None
-        if isinstance(body, list):
-            items = body
-        elif isinstance(body, dict):
-            for key in ("data", "items", "results", "records"):
-                if key in body and isinstance(body[key], list):
-                    items = body[key]
-                    break
-            if items is None:
-                # Maybe single-object response
-                if "id" in body:
-                    items = [body]
-        if items is None:
-            break
-        all_items.extend(items)
-        if len(items) < PAGE_SIZE:
-            break
-
-    _cache[resource_path] = (time.time(), all_items)
-    return all_items
+    body = await _request(path, params)
+    items = _unwrap(body)
+    _cache[cache_key] = (time.time(), items)
+    return items
 
 
-async def get_properties() -> list[dict]:
-    return await _list("/properties")
-
-
-async def get_units() -> list[dict]:
-    return await _list("/units")
+# ─── Public list endpoints (no pagination) ─────────────────────────────────
+async def get_properties(include_subunits: bool = True) -> list[dict]:
+    return await _cached_list(
+        f"properties:{include_subunits}",
+        "/properties",
+        {"include_subunits": "true" if include_subunits else "false"},
+    )
 
 
 async def get_tenants() -> list[dict]:
-    return await _list("/tenants")
+    return await _cached_list("tenants", "/tenants", {})
 
 
 async def get_leases() -> list[dict]:
-    return await _list("/leases")
+    return await _cached_list("leases", "/leases", {})
 
 
-async def get_payments() -> list[dict]:
-    return await _list("/payments")
+# ─── Transactions (paginated, 300/page) ───────────────────────────────────
+async def get_transactions(age: str = "365d") -> list[dict]:
+    """Pull all transactions from the last `age` window (default ~1 year).
+
+    Rentec paginates transactions at 300/page. We stop when `summary.more_records`
+    is false or we hit MAX_TX_PAGES.
+    """
+    cache_key = f"transactions:{age}"
+    cached = _cache.get(cache_key)
+    if cached and (time.time() - cached[0]) < CACHE_TTL:
+        return cached[1]
+
+    all_rows: list[dict] = []
+    for page in range(1, MAX_TX_PAGES + 1):
+        body = await _request("/transactions", {"page": page, "age": age})
+        if not body:
+            break
+        rows = _unwrap(body)
+        all_rows.extend(rows)
+        summary = (body or {}).get("summary") or {}
+        if not summary.get("more_records"):
+            break
+    _cache[cache_key] = (time.time(), all_rows)
+    return all_rows
 
 
-async def get_ledger_entries() -> list[dict]:
-    return await _list("/ledgers")
-
-
+# ─── Sync everything ──────────────────────────────────────────────────────
 async def sync_all(force: bool = False) -> dict:
-    """Fetch everything from Rentec and return a summary dict."""
     if force:
         clear_cache()
     results = await asyncio.gather(
-        get_properties(),
-        get_units(),
+        get_properties(include_subunits=True),
         get_tenants(),
         get_leases(),
-        get_payments(),
+        get_transactions(),
         return_exceptions=True,
     )
 
@@ -152,22 +147,38 @@ async def sync_all(force: bool = False) -> dict:
         return v if isinstance(v, list) else []
 
     properties = safe(0)
-    units = safe(1)
-    tenants = safe(2)
-    leases = safe(3)
-    payments = safe(4)
+    tenants = safe(1)
+    leases = safe(2)
+    transactions = safe(3)
+
+    # Units are subunits of properties — flatten them out for convenience.
+    units: list[dict] = []
+    for p in properties:
+        for sub in (p.get("subunits") or []):
+            units.append({**sub, "parent_property_id": p.get("id")})
+
+    # Payments are transactions classified as rent income (best-effort filter).
+    # The full transaction set is also exposed.
+    payments = [
+        t for t in transactions
+        if (str(t.get("type") or "").lower() in {"payment", "rent", "income", "receipt"})
+        or (t.get("amount_received") is not None)
+        or (t.get("renter_id") is not None and (t.get("amount") or 0) > 0)
+    ]
 
     return {
         "properties": properties,
         "units": units,
         "tenants": tenants,
         "leases": leases,
+        "transactions": transactions,
         "payments": payments,
         "counts": {
             "properties": len(properties),
             "units": len(units),
             "tenants": len(tenants),
             "leases": len(leases),
+            "transactions": len(transactions),
             "payments": len(payments),
         },
         "synced_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -176,10 +187,13 @@ async def sync_all(force: bool = False) -> dict:
 
 
 async def check_connection() -> dict:
-    """Ping Rentec to verify credentials. Returns status and any auth hint."""
+    """Hit /ping (auth-protected) to verify the key."""
     if not has_key():
         return {"connected": False, "reason": "RENTEC_API_KEY not set"}
-    body = await _request("/properties", {"page": 1, "pageSize": 1})
+    body = await _request("/ping")
     if body is None:
-        return {"connected": False, "reason": "API returned error or unreachable"}
+        # Try /properties as fallback ping
+        body = await _request("/properties", {"data_only": "true"})
+        if body is None:
+            return {"connected": False, "reason": "API returned error or unreachable"}
     return {"connected": True, "reason": "OK"}
