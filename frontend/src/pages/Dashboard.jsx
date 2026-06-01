@@ -8,17 +8,19 @@ export default function Dashboard() {
   const [health, setHealth] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [props, setProps] = useState([]);
+  const [snap, setSnap] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState("");
 
   const load = async () => {
-    const [s, h, t, p] = await Promise.all([
+    const [s, h, t, p, snap] = await Promise.all([
       api.get("/rent-status/summary").then((r) => r.data).catch(() => null),
       api.get("/health").then((r) => r.data).catch(() => null),
       api.get("/tasks").then((r) => r.data).catch(() => []),
       api.get("/properties").then((r) => r.data).catch(() => []),
+      api.get("/rentec/snapshot").then((r) => r.data).catch(() => null),
     ]);
-    setSummary(s); setHealth(h); setTasks(t); setProps(p);
+    setSummary(s); setHealth(h); setTasks(t); setProps(p); setSnap(snap);
   };
 
   useEffect(() => { load(); }, []);
@@ -63,7 +65,7 @@ export default function Dashboard() {
 
         {/* Stat row */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4" data-testid="dashboard-stats">
-          <Stat icon={Building2} label="Properties" value={props.length} sub="In portfolio" />
+          <Stat icon={Building2} label="Properties" value={(snap?.counts?.properties ?? props.length) || 0} sub={snap?.counts?.properties ? `${snap.counts.units || 0} units · from Rentec` : "In portfolio"} />
           <Stat
             icon={DollarSign}
             label="Collected MTD"

@@ -441,37 +441,76 @@ async def rentec_snapshot(user: dict = Depends(current_user)):
     return snap
 
 
+@api.get("/rentec/raw")
+async def rentec_raw(user: dict = Depends(current_user)):
+    """Debug — return one sample of each entity so we can see real Rentec field names."""
+    snap = await db.rentec_snapshot.find_one({"_singleton": True}) or {}
+    return {
+        "sample_property": (snap.get("properties") or [None])[0],
+        "sample_lease": (snap.get("leases") or [None])[0],
+        "sample_tenant": (snap.get("tenants") or [None])[0],
+        "sample_transaction": (snap.get("transactions") or [None])[0],
+        "counts": snap.get("counts"),
+    }
+
+
 # ─── Rent status — current month summary
 @api.get("/rent-status/summary")
 async def rent_status_summary(user: dict = Depends(current_user)):
     """Builds a current-month summary from the Rentec snapshot (or empty)."""
     snap = await db.rentec_snapshot.find_one({"_singleton": True}) or {}
     leases = snap.get("leases", [])
-    payments = snap.get("payments", [])
+    transactions = snap.get("transactions", [])
 
     now = datetime.now(timezone.utc)
     month, year = now.month, now.year
+    month_prefix = f"{year}-{month:02d}"
 
-    # Sum expected
+    # Sum expected — try a wide range of field names Rentec might use
+    rent_field_candidates = (
+        "total_recurring_rent", "totalRecurringRent",
+        "monthly_rent", "monthlyRent",
+        "rent", "rent_amount", "rentAmount",
+        "amount",
+    )
     total_expected = 0.0
+    active_leases = 0
     for l in leases:
-        if isinstance(l, dict):
-            for k in ("monthlyRent", "totalRecurringRent", "monthly_rent"):
-                v = l.get(k)
-                if isinstance(v, (int, float)):
-                    total_expected += float(v)
-                    break
+        if not isinstance(l, dict):
+            continue
+        # only count active leases
+        status = str(l.get("status") or l.get("active") or "").lower()
+        if status and status in {"ended", "expired", "inactive", "false"}:
+            continue
+        active_leases += 1
+        for k in rent_field_candidates:
+            v = l.get(k)
+            if isinstance(v, (int, float)) and v > 0:
+                total_expected += float(v)
+                break
 
+    # Sum collected — any positive transaction in current month
+    date_field_candidates = ("date", "transaction_date", "paymentDate", "tdate")
+    amount_field_candidates = ("amount", "amount_received", "amountReceived", "total")
     total_collected = 0.0
     paid_count = 0
-    for p in payments:
-        if isinstance(p, dict):
-            date_str = p.get("date") or p.get("paymentDate") or ""
-            if date_str.startswith(f"{year}-{month:02d}"):
-                amt = p.get("amount") or p.get("amountReceived") or 0
-                if isinstance(amt, (int, float)):
-                    total_collected += float(amt)
-                    paid_count += 1
+    for t in transactions:
+        if not isinstance(t, dict):
+            continue
+        d = ""
+        for k in date_field_candidates:
+            v = t.get(k)
+            if isinstance(v, str) and v:
+                d = v
+                break
+        if not d.startswith(month_prefix):
+            continue
+        for k in amount_field_candidates:
+            v = t.get(k)
+            if isinstance(v, (int, float)) and v > 0:
+                total_collected += float(v)
+                paid_count += 1
+                break
 
     collection_rate = round((total_collected / total_expected) * 100, 1) if total_expected > 0 else 0.0
 
@@ -482,7 +521,7 @@ async def rent_status_summary(user: dict = Depends(current_user)):
         "total_collected": round(total_collected, 2),
         "collection_rate": collection_rate,
         "paid_count": paid_count,
-        "lease_count": len(leases),
+        "lease_count": active_leases,
         "synced_at": snap.get("synced_at"),
         "configured": rentec_mod.has_key(),
     }

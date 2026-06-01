@@ -157,14 +157,7 @@ async def sync_all(force: bool = False) -> dict:
         for sub in (p.get("subunits") or []):
             units.append({**sub, "parent_property_id": p.get("id")})
 
-    # Payments are transactions classified as rent income (best-effort filter).
-    # The full transaction set is also exposed.
-    payments = [
-        t for t in transactions
-        if (str(t.get("type") or "").lower() in {"payment", "rent", "income", "receipt"})
-        or (t.get("amount_received") is not None)
-        or (t.get("renter_id") is not None and (t.get("amount") or 0) > 0)
-    ]
+    payments = transactions  # show all transactions; the dashboard slices them
 
     return {
         "properties": properties,
