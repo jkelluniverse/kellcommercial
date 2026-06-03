@@ -441,6 +441,45 @@ async def rentec_snapshot(user: dict = Depends(current_user)):
     return snap
 
 
+@api.get("/rentec/debug-transactions")
+async def rentec_debug_transactions(user: dict = Depends(admin_only)):
+    """Direct probe of Rentec /transactions. Returns the raw status + body of
+    multiple query attempts so we can see exactly what Rentec is sending back.
+    """
+    import httpx
+    from datetime import datetime as _dt, timedelta as _td
+    key = os.environ.get("RENTEC_API_KEY", "")
+    base = os.environ.get("RENTEC_BASE_URL", "https://secure.rentecdirect.com/api/v3").rstrip("/")
+    today = _dt.utcnow().date()
+    attempts = [
+        {"name": "no-params", "params": {}},
+        {"name": "age-30d", "params": {"age": "30d"}},
+        {"name": "age-90d", "params": {"age": "90d"}},
+        {"name": "explicit-30day-window", "params": {"start_date": (today - _td(days=30)).isoformat(), "end_date": today.isoformat()}},
+        {"name": "explicit-365day-window", "params": {"start_date": (today - _td(days=365)).isoformat(), "end_date": today.isoformat()}},
+        {"name": "with-page-1", "params": {"page": 1, "age": "30d"}},
+    ]
+    out = []
+    headers = {"X-API-Key": key, "Accept": "application/json"}
+    async with httpx.AsyncClient(timeout=15) as client:
+        for a in attempts:
+            try:
+                r = await client.get(f"{base}/transactions", headers=headers, params=a["params"])
+                body_preview = r.text[:400]
+                try:
+                    j = r.json()
+                    if isinstance(j, dict):
+                        data = j.get("data")
+                        summary = j.get("summary")
+                        body_preview = f"summary={summary} | data_len={len(data) if isinstance(data, list) else 'not-list'} | first={data[0] if isinstance(data, list) and data else None}"
+                except Exception:
+                    pass
+                out.append({"attempt": a["name"], "params": a["params"], "status": r.status_code, "body": body_preview})
+            except Exception as e:
+                out.append({"attempt": a["name"], "params": a["params"], "error": str(e)})
+    return {"base_url": base, "key_set": bool(key), "attempts": out}
+
+
 @api.get("/rentec/raw")
 async def rentec_raw(user: dict = Depends(current_user)):
     """Debug — return one sample of each entity so we can see real Rentec field names."""

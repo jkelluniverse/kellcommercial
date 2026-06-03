@@ -48,14 +48,9 @@ export function Layout({ children }) {
         }`}
       >
         <div className="px-6 pt-6 pb-5 border-b border-ink-600">
-          <div className="flex items-center gap-3">
-            <img src={LOGO_URL} alt="Kell Commercial" className="h-12 w-12 object-contain" />
-            <div>
-              <div className="brand-mark text-3xl">KELL</div>
-              <div className="brand-sub mt-0.5">EST. 1978</div>
-            </div>
+          <div className="flex items-center justify-center">
+            <img src={LOGO_URL} alt="Kell Commercial" className="h-20 w-auto object-contain" />
           </div>
-          <div className="mt-4 text-[10px] tracking-[0.3em] text-bone-300 uppercase">Commercial · Asset Manager</div>
         </div>
 
         <nav className="px-3 py-4 space-y-0.5">
