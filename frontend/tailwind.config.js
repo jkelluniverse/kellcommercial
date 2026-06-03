@@ -27,11 +27,12 @@ module.exports = {
           200: "#1a1a1a",
           300: "#3d3d3d", // secondary text
         },
+        // Kell Commercial brand red (matched to the logo wordmark).
         crimson: {
-          500: "#c92828",
-          600: "#b91c1c", // primary
-          700: "#991616",
-          800: "#7f1010",
+          500: "#c0392f",
+          600: "#a8201a", // primary — logo red
+          700: "#8c1a15",
+          800: "#6f1410",
         },
         gold: {
           400: "#d4b773",
@@ -46,7 +47,7 @@ module.exports = {
       },
       letterSpacing: { hero: "0.2em", brand: "0.35em" },
       boxShadow: {
-        glow: "0 0 0 1px rgba(185,28,28,0.15), 0 24px 60px -28px rgba(185,28,28,0.30)",
+        glow: "0 0 0 1px rgba(168,32,26,0.15), 0 24px 60px -28px rgba(168,32,26,0.30)",
         soft: "0 1px 2px rgba(0,0,0,0.04), 0 8px 24px -12px rgba(0,0,0,0.08)",
       },
     },

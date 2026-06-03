@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 300" width="760" height="300" role="img" aria-label="Kell Commercial Leasing — Est. 1978">
+  <style>
+    .wordmark { font-family: 'Oswald','Impact','Arial Narrow',sans-serif; font-weight: 700; }
+    .sub      { font-family: 'Oswald','Arial Narrow',sans-serif; font-weight: 600; }
+  </style>
+  <text x="0" y="150" class="wordmark" font-size="200" letter-spacing="6" fill="#A8201A">KELL</text>
+  <rect x="6" y="178" width="170" height="112" fill="#ffffff" stroke="#A8201A" stroke-width="6"/>
+  <text x="91" y="222" text-anchor="middle" class="sub" font-size="34" letter-spacing="3" fill="#C9A961">EST. 1978</text>
+  <rect x="40" y="238" width="100" height="30" fill="#A8201A"/>
+  <g fill="#A8201A">
+    <rect x="46" y="268" width="6" height="16"/>
+    <rect x="66" y="268" width="6" height="16"/>
+    <rect x="86" y="268" width="6" height="16"/>
+    <rect x="106" y="268" width="6" height="16"/>
+    <rect x="126" y="268" width="6" height="16"/>
+  </g>
+  <text x="200" y="222" class="wordmark" font-size="62" letter-spacing="1" fill="#111111">COMMERCIAL</text>
+  <text x="200" y="284" class="wordmark" font-size="62" letter-spacing="1" fill="#111111">LEASING</text>
+  <rect x="200" y="292" width="554" height="6" fill="#A8201A"/>
+</svg>

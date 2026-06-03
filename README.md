@@ -1,10 +1,14 @@
 # Kell Commercial — Asset Manager
 
-A trimmed, rebranded property-management app for Kell Commercial. Built on
-FastAPI + React + MongoDB.
+A lightweight, **read-only** companion app for tracking the Kell Commercial
+portfolio's payments, tenants, and tasks. Built on FastAPI + React + MongoDB,
+with live data pulled from Rentec Direct. It never writes back to Rentec.
 
 ## Quick start (local)
 ```bash
+# 1. Configure
+cp .env.example backend/.env   # then fill in real values
+
 # Backend
 cd backend
 pip install -r requirements.txt
@@ -16,35 +20,42 @@ yarn install
 yarn start
 ```
 
-Sign in at <http://localhost:3000> with the credentials in
-[`memory/test_credentials.md`](memory/test_credentials.md).
+Sign in at <http://localhost:3000> with the `ADMIN_EMAIL` / `ADMIN_PASSWORD`
+you set in `backend/.env`.
 
 ## Sections
 
-1. **Dashboard** — Portfolio overview, current-month rent collection, recent tasks, integration status.
-2. **Properties & Units** — Residential portfolio + Kell Commercial building (one property, many child units).
-3. **Tenants & Leases** — Tenant directory, active leases, deposits, rent terms.
-4. **Payments** — Rentec Direct snapshot + manual entries; fires Gmail
-   notifications.
-5. **Documents** — Searches the Google Drive folder via service account.
-6. **Tasks** — Kanban-style task tracker with priority and property tagging.
-7. **Expenses** — Bookkeeping for non-job expenses.
-8. **Utility Accounts** — Tenant-submitted utility provider records (admin view).
-9. **Applications** — Tenant applications submitted via the public form.
+1. **Dashboard** — Payment status at a glance: who's past due and by how much,
+   current-month collection, and open tasks.
+2. **Payments** — Live Rentec Direct snapshot of payments, with manual entries.
+3. **Tenants** — Tenant directory with each tenant's payment situation
+   (balance / past-due) front and center.
+4. **Properties & Units** — Portfolio plus the Kell Commercial building modeled
+   as one property with multiple child units.
+5. **Tasks** — Personal task list with priority and property tagging.
 
 ## Configuration
 
-See [`memory/PRD.md`](memory/PRD.md) for the full feature list, env vars, and
-known gaps.
+All configuration is via environment variables — see [`.env.example`](.env.example).
+Key secrets to set: `JWT_SECRET`, `ADMIN_PASSWORD`, `VIEWER_PASSWORD`,
+`RENTEC_API_KEY`, and (optional) `GMAIL_USER` / `GMAIL_APP_PASSWORD`.
+
+## Rentec Direct sync
+
+Read-only against the v3 API (header `X-API-Key`), throttled under the 60
+req/min limit. A background job refreshes the cached snapshot every
+`RENTEC_SYNC_INTERVAL_MIN` minutes, and the **Refresh** button triggers a sync
+on demand. Amounts owed come from Rentec's pre-computed `Tenant.balance` /
+`Lease.balance` — never summed from transactions. See
+[`RENTEC_SYNC_SPEC.md`](RENTEC_SYNC_SPEC.md).
 
 ## Deployment
 
-See [`DEPLOY_RAILWAY.md`](DEPLOY_RAILWAY.md) for step-by-step Railway
-deployment and how to connect the `kellcommercial.com` domain.
+See [`DEPLOY_RAILWAY.md`](DEPLOY_RAILWAY.md) for Railway deployment.
 
 ## Branding
 
-- Color palette: crimson `#B91C1C`, gold `#C9A961`, near-black `#0A0A0A`.
-- Display font: Oswald (free, Google Fonts).
-- Body font: Inter.
-- Logo asset: rendered from `frontend/src/lib/api.js`'s `LOGO_URL`.
+- Color palette: brand red `#A8201A`, gold `#C9A961`, near-black `#0A0A0A` on white.
+- Display font: Oswald. Body font: Inter.
+- Logo: `assets/kellcommercial-logo.svg` (served from `frontend/public/`,
+  referenced via `LOGO_URL` in `frontend/src/lib/api.js`).

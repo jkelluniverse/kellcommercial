@@ -38,7 +38,7 @@ from datetime import datetime
 
 # ---- Brand defaults (override via init flags) -------------------------------
 KC_NAME = "Kell Commercial"
-KC_COLOR = "#1B2A4A"          # deep navy — deliberately distinct from NCH crimson
+KC_COLOR = "#A8201A"          # Kell Commercial brand red (matched to the logo)
 KC_PHONE = "[FILL IN: Kell Commercial phone]"
 ADMIN_EMAIL = "jacob@nicecityhomes.com"   # intended admin login — kept on purpose
 
@@ -46,7 +46,8 @@ ADMIN_EMAIL = "jacob@nicecityhomes.com"   # intended admin login — kept on pur
 SKIP_DIRS = {".git", "node_modules", "dist", "build", ".next", "venv", "__pycache__", ".idea"}
 SKIP_FILES = {"NCH_AUDIT_REPORT.md",   # our own report
               "CLAUDE.md", "RENTEC_SYNC_SPEC.md",
-              "EMERGENT_INSTRUCTIONS.md", "README.md"}  # instruction docs, not app code
+              "EMERGENT_INSTRUCTIONS.md", "README.md",
+              "kc_build.py"}  # the scrubber's own ruleset — would self-flag otherwise
 BINARY_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".pdf", ".zip",
               ".woff", ".woff2", ".ttf", ".otf", ".mp4", ".mov", ".lock"}
 

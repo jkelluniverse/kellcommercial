@@ -1,16 +1,18 @@
 """Kell Commercial — FastAPI backend.
 
+A lightweight, READ-ONLY companion app for tracking the Kell Commercial
+portfolio's payments, tenants, and tasks. It pulls live data from Rentec
+Direct and never writes anything back to Rentec.
+
 Modules:
 - /api/auth/*          — email+password JWT auth
 - /api/properties      — properties (with units sub-collection)
 - /api/tenants, /api/leases
-- /api/rent-status     — current month snapshot powered by Rentec
+- /api/rent-status     — current-month snapshot + per-account past-due detail
 - /api/rentec/*        — manual sync, raw fetches
 - /api/payments        — payment history (synced from Rentec + manual entries)
-- /api/tasks, /api/expenses
-- /api/utility-accounts, /api/tenant-applications  (public + admin)
-- /api/documents/*     — Drive search wrapper
-- /api/notifications/* — Gmail email helpers
+- /api/tasks           — Jacob's personal task list
+- /api/notifications/* — payment-received / past-due email helpers
 """
 from dotenv import load_dotenv
 from pathlib import Path
@@ -27,11 +29,11 @@ from typing import Optional
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, Request, Response, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 import auth as auth_mod
 import models as M
 import rentec as rentec_mod
-import drive as drive_mod
 import email_svc
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -44,20 +46,51 @@ if not MONGO_URL or not DB_NAME:
 
 client: Optional[AsyncIOMotorClient] = None
 db = None
+scheduler: Optional[AsyncIOScheduler] = None
+
+# How often the background sync pulls fresh data from Rentec (minutes).
+SYNC_INTERVAL_MIN = int(os.environ.get("RENTEC_SYNC_INTERVAL_MIN", "60"))
+
+
+async def _run_sync_and_store(force: bool = True) -> dict:
+    """Pull from Rentec, cache the snapshot in Mongo, and fire past-due alerts.
+
+    Used by both the manual Refresh endpoint and the scheduled background sync.
+    Read-only against Rentec — we only ever GET.
+    """
+    summary = await rentec_mod.sync_all(force=force)
+    await db.rentec_snapshot.update_one(
+        {"_singleton": True},
+        {"$set": {**summary, "_singleton": True}},
+        upsert=True,
+    )
+    return summary
+
+
+async def _scheduled_sync():
+    if not rentec_mod.has_key():
+        return
+    try:
+        summary = await _run_sync_and_store(force=True)
+        log.info("Scheduled Rentec sync complete: %s", summary.get("counts"))
+    except Exception as e:  # never let a sync error kill the scheduler
+        log.error("Scheduled Rentec sync failed: %s", e)
 
 
 async def _seed_users():
     """Idempotent seed of admin + viewer."""
     admin_email = os.environ.get("ADMIN_EMAIL", "").lower()
     admin_pwd = os.environ.get("ADMIN_PASSWORD", "")
+    admin_name = os.environ.get("ADMIN_NAME", "Administrator")
     viewer_email = os.environ.get("VIEWER_EMAIL", "").lower()
     viewer_pwd = os.environ.get("VIEWER_PASSWORD", "")
+    viewer_name = os.environ.get("VIEWER_NAME", "Portfolio Viewer")
     if not admin_email or not admin_pwd or not viewer_email or not viewer_pwd:
         log.warning("Seed skipped — admin or viewer credentials missing")
         return
     pairs = [
-        (admin_email, admin_pwd, "Jacob Kell", "admin"),
-        (viewer_email, viewer_pwd, "Mike Kell", "viewer"),
+        (admin_email, admin_pwd, admin_name, "admin"),
+        (viewer_email, viewer_pwd, viewer_name, "viewer"),
     ]
     for email, pwd, name, role in pairs:
         existing = await db.users.find_one({"email": email})
@@ -78,7 +111,7 @@ async def _seed_users():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global client, db
+    global client, db, scheduler
     client = AsyncIOMotorClient(MONGO_URL)
     db = client[DB_NAME]
     await db.users.create_index("email", unique=True)
@@ -88,12 +121,20 @@ async def lifespan(app: FastAPI):
     await db.leases.create_index("id", unique=True)
     await db.payments.create_index("id", unique=True)
     await db.tasks.create_index("id", unique=True)
-    await db.expenses.create_index("id", unique=True)
-    await db.utility_accounts.create_index("id", unique=True)
-    await db.tenant_applications.create_index("id", unique=True)
     await _seed_users()
-    log.info("Kell Commercial backend ready")
+
+    # Background Rentec sync — keeps the cached snapshot fresh without the
+    # operator having to hit Refresh. Manual Refresh is still available.
+    scheduler = AsyncIOScheduler(timezone="UTC")
+    scheduler.add_job(_scheduled_sync, "interval", minutes=SYNC_INTERVAL_MIN, id="rentec_sync")
+    scheduler.start()
+    if rentec_mod.has_key():
+        asyncio.create_task(_scheduled_sync())  # warm the cache on boot
+
+    log.info("Kell Commercial backend ready (sync every %d min)", SYNC_INTERVAL_MIN)
     yield
+    if scheduler is not None:
+        scheduler.shutdown(wait=False)
     if client is not None:
         client.close()
 
@@ -138,7 +179,6 @@ async def health():
     return {
         "ok": True,
         "rentec_configured": rentec_mod.has_key(),
-        "drive_configured": drive_mod.is_configured(),
         "email_configured": email_svc.is_configured(),
     }
 
@@ -323,67 +363,6 @@ async def delete_task(task_id: str, user: dict = Depends(admin_only)):
     return {"ok": True}
 
 
-# ─── Expenses
-@api.get("/expenses")
-async def list_expenses(user: dict = Depends(current_user)):
-    cursor = db.expenses.find()
-    items = [_strip_mongo(e) async for e in cursor]
-    items.sort(key=lambda e: e.get("expense_date", ""), reverse=True)
-    return items
-
-
-@api.post("/expenses")
-async def create_expense(body: M.ExpenseIn, user: dict = Depends(admin_only)):
-    e = M.Expense(submitted_by=user["email"], **body.model_dump()).model_dump()
-    await db.expenses.insert_one({**e})
-    return _strip_mongo(e)
-
-
-@api.delete("/expenses/{expense_id}")
-async def delete_expense(expense_id: str, user: dict = Depends(admin_only)):
-    await db.expenses.delete_one({"id": expense_id})
-    return {"ok": True}
-
-
-# ─── Utility accounts (public submission + admin list)
-@api.post("/public/utility-accounts")
-async def public_utility(body: M.UtilityAccountIn):
-    a = M.UtilityAccount(**body.model_dump()).model_dump()
-    await db.utility_accounts.insert_one({**a})
-    return {"ok": True, "id": a["id"]}
-
-
-@api.get("/utility-accounts")
-async def list_utility(user: dict = Depends(current_user)):
-    cursor = db.utility_accounts.find()
-    items = [_strip_mongo(u) async for u in cursor]
-    items.sort(key=lambda u: u.get("created_at", ""), reverse=True)
-    return items
-
-
-# ─── Tenant applications (public + admin)
-@api.post("/public/tenant-applications")
-async def public_application(body: M.TenantApplicationIn):
-    a = M.TenantApplication(**body.model_dump()).model_dump()
-    await db.tenant_applications.insert_one({**a})
-    return {"ok": True, "id": a["id"]}
-
-
-@api.get("/tenant-applications")
-async def list_applications(user: dict = Depends(current_user)):
-    cursor = db.tenant_applications.find()
-    items = [_strip_mongo(a) async for a in cursor]
-    items.sort(key=lambda a: a.get("created_at", ""), reverse=True)
-    return items
-
-
-@api.put("/tenant-applications/{app_id}")
-async def update_application(app_id: str, body: dict = Body(...), user: dict = Depends(admin_only)):
-    await db.tenant_applications.update_one({"id": app_id}, {"$set": body})
-    a = await db.tenant_applications.find_one({"id": app_id})
-    return _strip_mongo(a) if a else None
-
-
 # ─── Payments (combined: local + Rentec snapshot)
 @api.get("/payments")
 async def list_payments(user: dict = Depends(current_user)):
@@ -420,14 +399,8 @@ async def rentec_status(user: dict = Depends(current_user)):
 
 @api.post("/rentec/sync")
 async def rentec_sync(user: dict = Depends(admin_only), force: bool = True):
-    """Pull from Rentec and cache the latest snapshot into Mongo for fast UI access."""
-    summary = await rentec_mod.sync_all(force=force)
-    # Cache the latest snapshot under a singleton key
-    await db.rentec_snapshot.update_one(
-        {"_singleton": True},
-        {"$set": {**summary, "_singleton": True}},
-        upsert=True,
-    )
+    """Manual Refresh — pull from Rentec and cache the snapshot for fast UI access."""
+    summary = await _run_sync_and_store(force=force)
     return {"counts": summary["counts"], "synced_at": summary["synced_at"], "configured": summary["configured"]}
 
 
@@ -573,6 +546,95 @@ async def rentec_raw(user: dict = Depends(current_user)):
     }
 
 
+# ─── Rent status helpers ───────────────────────────────────────────────────
+def _first(d: dict, keys, default=None):
+    """Return the first present, non-empty value among `keys`."""
+    for k in keys:
+        v = d.get(k)
+        if v not in (None, ""):
+            return v
+    return default
+
+
+def _num(v) -> float:
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _build_accounts(snap: dict) -> list[dict]:
+    """One row per tenant with their payment situation front and center.
+
+    'Amount owed / past due' comes straight from Rentec's pre-computed
+    `Tenant.balance` (falling back to the active lease balance) — we never
+    sum transactions to derive what's owed (per RENTEC_SYNC_SPEC).
+    """
+    tenants = snap.get("tenants", []) or []
+    leases = snap.get("leases", []) or []
+    properties = snap.get("properties", []) or []
+
+    addr_by_pid: dict = {}
+    for p in properties:
+        if isinstance(p, dict):
+            pid = _first(p, ("property_id", "id"))
+            if pid is not None:
+                addr_by_pid[pid] = _first(p, ("address", "name", "street"), "")
+
+    # Most recent active lease per renter (active = no move_out date)
+    lease_by_renter: dict = {}
+    for l in leases:
+        if not isinstance(l, dict) or l.get("move_out"):
+            continue
+        rid = _first(l, ("renter_id", "tenant_id"))
+        if rid is not None:
+            lease_by_renter[rid] = l
+
+    accounts = []
+    for t in tenants:
+        if not isinstance(t, dict):
+            continue
+        tid = _first(t, ("tenant_id", "renter_id", "id"))
+        name = _first(t, ("name", "full_name"), None) or \
+            (f"{t.get('first_name', '')} {t.get('last_name', '')}".strip() or "Tenant")
+        lease = lease_by_renter.get(tid, {})
+        pid = _first(t, ("property_id",)) or _first(lease, ("property_id",))
+        # Past due = Rentec's pre-computed balance (tenant first, else lease)
+        balance = _num(_first(t, ("balance",), None))
+        if balance == 0:
+            balance = _num(_first(lease, ("balance",), 0))
+        status = "past_due" if balance > 0 else ("credit" if balance < 0 else "current")
+        accounts.append({
+            "tenant_id": tid,
+            "name": name,
+            "email": _first(t, ("email", "email_address"), None),
+            "phone": _first(t, ("phone", "phone_number", "mobile"), None),
+            "property_id": pid,
+            "address": addr_by_pid.get(pid, ""),
+            "balance": round(balance, 2),
+            "past_due": round(balance, 2) if balance > 0 else 0.0,
+            "deposit_balance": round(_num(_first(lease, ("deposit_balance",), 0)), 2),
+            "monthly_rent": round(_num(_first(lease, ("rent", "monthly_rent"), 0)), 2),
+            "status": status,
+        })
+    # Worst offenders first
+    accounts.sort(key=lambda a: a["past_due"], reverse=True)
+    return accounts
+
+
+@api.get("/rent-status/accounts")
+async def rent_status_accounts(user: dict = Depends(current_user)):
+    """Per-tenant account status, balance, and past-due amount — pulled live."""
+    snap = await db.rentec_snapshot.find_one({"_singleton": True}) or {}
+    accounts = _build_accounts(snap)
+    return {
+        "accounts": accounts,
+        "past_due": [a for a in accounts if a["status"] == "past_due"],
+        "synced_at": snap.get("synced_at"),
+        "configured": rentec_mod.has_key(),
+    }
+
+
 # ─── Rent status — current month summary
 @api.get("/rent-status/summary")
 async def rent_status_summary(user: dict = Depends(current_user)):
@@ -583,11 +645,13 @@ async def rent_status_summary(user: dict = Depends(current_user)):
     - A lease has `property_id` + `renter_id` + `lease_begin/lease_end` + `balance`
     - A lease is active if `move_out` is null
     - Transactions are in `/transactions` endpoint
+    - Amounts owed come from pre-computed balances, never summed transactions
     """
     snap = await db.rentec_snapshot.find_one({"_singleton": True}) or {}
     properties = snap.get("properties", [])
     leases = snap.get("leases", [])
     transactions = snap.get("transactions", [])
+    accounts = _build_accounts(snap)
 
     # Build a property-id → monthly_rent map
     rent_by_property: dict[int, float] = {}
@@ -646,6 +710,9 @@ async def rent_status_summary(user: dict = Depends(current_user)):
 
     collection_rate = round((total_collected / total_expected) * 100, 1) if total_expected > 0 else 0.0
 
+    past_due_accounts = [a for a in accounts if a["status"] == "past_due"]
+    past_due_total = round(sum(a["past_due"] for a in past_due_accounts), 2)
+
     return {
         "month": now.month,
         "year": now.year,
@@ -653,23 +720,16 @@ async def rent_status_summary(user: dict = Depends(current_user)):
         "total_collected": round(total_collected, 2),
         "collection_rate": collection_rate,
         "total_balance_due": round(total_balance_due, 2),
+        "past_due_total": past_due_total,
+        "past_due_count": len(past_due_accounts),
+        "accounts_count": len(accounts),
+        "current_count": sum(1 for a in accounts if a["status"] == "current"),
         "paid_count": paid_count,
         "lease_count": active_leases,
         "transactions_count": len(transactions),
         "synced_at": snap.get("synced_at"),
         "configured": rentec_mod.has_key(),
     }
-
-
-# ─── Documents (Drive search)
-@api.get("/documents/search")
-async def documents_search(q: str = Query(..., min_length=2), user: dict = Depends(current_user)):
-    return drive_mod.search(q, max_results=30)
-
-
-@api.get("/documents/root")
-async def documents_root(user: dict = Depends(current_user)):
-    return drive_mod.list_root()
 
 
 # ─── Notifications test
@@ -686,7 +746,7 @@ async def notif_test(user: dict = Depends(admin_only)):
 app.include_router(api)
 
 
-# ─── Serve the React build (single-service deployment, like the NCH app) ───
+# ─── Serve the React build (single-service deployment) ─────────────────────
 # In production, Railway builds the frontend (`frontend/build/`) and the
 # FastAPI process serves it alongside `/api/*`. No separate frontend service.
 from pathlib import Path as _Path

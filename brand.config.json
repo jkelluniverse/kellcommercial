@@ -1,0 +1,14 @@
+{
+  "name": "Kell Commercial",
+  "legalName": "Kell Commercial Leasing",
+  "tagline": "EST. 1978",
+  "logo": "assets/kellcommercial-logo.svg",
+  "favicon": "frontend/public/favicon.svg",
+  "colors": {
+    "primary": "#A8201A",
+    "primaryDark": "#8C1A15",
+    "accent": "#C9A961",
+    "ink": "#0A0A0A",
+    "paper": "#FFFFFF"
+  }
+}

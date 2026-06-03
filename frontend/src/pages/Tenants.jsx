@@ -5,23 +5,32 @@ import { PageHeader, Card, Empty, StatusPill } from "../components/UI";
 import { Modal, Field } from "./Properties";
 import { Plus, Trash2 } from "lucide-react";
 
+const money = (n) => `$${Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+
 export default function Tenants() {
   const { isAdmin } = useAuth();
   const [tenants, setTenants] = useState([]);
   const [leases, setLeases] = useState([]);
   const [properties, setProperties] = useState([]);
+  const [accounts, setAccounts] = useState([]);
   const [showTenant, setShowTenant] = useState(false);
   const [showLease, setShowLease] = useState(false);
 
   const load = async () => {
-    const [t, l, p] = await Promise.all([
+    const [t, l, p, acc] = await Promise.all([
       api.get("/tenants").then((r) => r.data),
       api.get("/leases").then((r) => r.data),
       api.get("/properties").then((r) => r.data),
+      api.get("/rent-status/accounts").then((r) => r.data?.accounts || []).catch(() => []),
     ]);
-    setTenants(t); setLeases(l); setProperties(p);
+    setTenants(t); setLeases(l); setProperties(p); setAccounts(acc);
   };
   useEffect(() => { load(); }, []);
+
+  // Join Rentec payment situation onto local tenants by name (case-insensitive).
+  const acctByName = {};
+  accounts.forEach((a) => { if (a.name) acctByName[a.name.trim().toLowerCase()] = a; });
+  const acctFor = (t) => acctByName[(t.name || "").trim().toLowerCase()];
 
   const addTenant = async (form) => { await api.post("/tenants", form); setShowTenant(false); load(); };
   const removeTenant = async (id) => {
@@ -53,11 +62,43 @@ export default function Tenants() {
         )}
       />
 
+      {/* Payment situation, straight from Rentec — the headline for each tenant */}
+      {accounts.length > 0 && (
+        <div className="px-6 md:px-10 pt-6">
+          <Card title="Payment Situation — Live from Rentec" testId="tenants-accounts">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[10px] uppercase tracking-[0.2em] text-ink-500 border-b border-ink-600">
+                    <th className="py-2 pr-3">Tenant</th>
+                    <th className="py-2 pr-3">Property</th>
+                    <th className="py-2 pr-3 text-right">Balance</th>
+                    <th className="py-2 pr-3 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {accounts.map((a) => (
+                    <tr key={a.tenant_id || a.name} className="border-b border-ink-600 last:border-0">
+                      <td className="py-2 pr-3 text-bone-100 font-medium">{a.name}</td>
+                      <td className="py-2 pr-3 text-bone-300">{a.address || "—"}</td>
+                      <td className={`py-2 pr-3 text-right font-mono ${a.past_due > 0 ? "text-crimson-600 font-semibold" : "text-bone-300"}`}>{money(a.balance)}</td>
+                      <td className="py-2 pr-3 text-center"><StatusPill status={a.status === "past_due" ? "delinquent" : a.status === "credit" ? "paid" : "active"} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
       <div className="p-6 md:p-10 grid lg:grid-cols-2 gap-6">
         <Card title="Tenants" testId="tenants-card">
-          {tenants.length === 0 ? <Empty message="Add a tenant to get started." /> : (
+          {tenants.length === 0 ? <Empty message="Add a tenant to get started, or run a Rentec sync above." /> : (
             <div className="space-y-2" data-testid="tenants-list">
-              {tenants.map((t) => (
+              {tenants.map((t) => {
+                const acct = acctFor(t);
+                return (
                 <div key={t.id} className="flex items-center justify-between py-2 border-b border-ink-600 last:border-0">
                   <div>
                     <div className="text-bone-100">{t.name}</div>
@@ -65,13 +106,21 @@ export default function Tenants() {
                       {t.email || ""} {t.phone ? `· ${t.phone}` : ""} {t.property_id ? `· ${propName(t.property_id)}` : ""}
                     </div>
                   </div>
-                  {isAdmin && (
-                    <button onClick={() => removeTenant(t.id)} className="text-ink-500 hover:text-crimson-500">
-                      <Trash2 size={14} />
-                    </button>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {acct && (
+                      <span className={`text-xs font-mono ${acct.past_due > 0 ? "text-crimson-600 font-semibold" : "text-emerald-700"}`}>
+                        {acct.past_due > 0 ? `${money(acct.past_due)} due` : "Current"}
+                      </span>
+                    )}
+                    {isAdmin && (
+                      <button onClick={() => removeTenant(t.id)} className="text-ink-500 hover:text-crimson-500">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </Card>

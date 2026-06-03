@@ -3,20 +3,16 @@ import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { LOGO_URL } from "../lib/api";
 import {
-  LayoutDashboard, Building2, Users, DollarSign, FolderSearch,
-  ListChecks, Receipt, Zap, FileText, LogOut, Menu, X, ShieldCheck
+  LayoutDashboard, Building2, Users, DollarSign,
+  ListChecks, LogOut, Menu, X, ShieldCheck
 } from "lucide-react";
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard" },
-  { to: "/properties", label: "Properties & Units", icon: Building2, testid: "nav-properties" },
-  { to: "/tenants", label: "Tenants & Leases", icon: Users, testid: "nav-tenants" },
   { to: "/payments", label: "Payments", icon: DollarSign, testid: "nav-payments" },
-  { to: "/documents", label: "Documents", icon: FolderSearch, testid: "nav-documents" },
+  { to: "/tenants", label: "Tenants", icon: Users, testid: "nav-tenants" },
+  { to: "/properties", label: "Properties & Units", icon: Building2, testid: "nav-properties" },
   { to: "/tasks", label: "Tasks", icon: ListChecks, testid: "nav-tasks" },
-  { to: "/expenses", label: "Expenses", icon: Receipt, testid: "nav-expenses" },
-  { to: "/utilities", label: "Utility Accounts", icon: Zap, testid: "nav-utilities" },
-  { to: "/applications", label: "Applications", icon: FileText, testid: "nav-applications" },
 ];
 
 export function Layout({ children }) {
