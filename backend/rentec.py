@@ -105,52 +105,59 @@ async def get_leases() -> list[dict]:
 
 
 # ─── Transactions (paginated, 300/page) ───────────────────────────────────
-async def get_transactions(age: Optional[str] = None) -> list[dict]:
-    """Pull transactions. Tries a few common queries to handle the case where
-    Rentec requires a filter to return any rows.
+# Rentec REQUIRES one of property_id / renter_id / bank_id / category_id per
+# call. We iterate the property list and aggregate, with a per-property cache.
+async def _transactions_for_property(prop_id: int, age: str) -> list[dict]:
+    all_rows: list[dict] = []
+    for page in range(1, MAX_TX_PAGES + 1):
+        body = await _request(
+            "/transactions",
+            {"property_id": prop_id, "age": age, "page": page},
+        )
+        if not body:
+            break
+        rows = _unwrap(body)
+        all_rows.extend(rows)
+        summary = (body or {}).get("summary") or {}
+        if not summary.get("more_records"):
+            break
+    return all_rows
 
-    Rentec paginates transactions at 300/page. We stop when `summary.more_records`
-    is false or we hit MAX_TX_PAGES.
-    """
-    cache_key = f"transactions:{age or 'auto'}"
+
+async def get_transactions(age: str = "365d") -> list[dict]:
+    """Pull transactions across all properties (Rentec requires a scoping filter)."""
+    cache_key = f"transactions:{age}"
     cached = _cache.get(cache_key)
     if cached and (time.time() - cached[0]) < CACHE_TTL:
         return cached[1]
 
-    # Try several param sets — some Rentec accounts require at least one filter
-    from datetime import datetime, timedelta
-    today = datetime.utcnow().date()
-    one_year_ago = (today - timedelta(days=365)).isoformat()
-    five_years_ago = (today - timedelta(days=365 * 5)).isoformat()
+    properties = await get_properties(include_subunits=True)
+    prop_ids: list[int] = []
+    for p in properties:
+        if isinstance(p, dict):
+            pid = p.get("property_id") or p.get("id")
+            if isinstance(pid, int):
+                prop_ids.append(pid)
 
-    query_attempts: list[dict] = []
-    if age:
-        query_attempts.append({"age": age})
-    query_attempts.extend([
-        {"start_date": one_year_ago, "end_date": today.isoformat()},
-        {"start_date": five_years_ago, "end_date": today.isoformat()},
-        {"age": "365d"},
-        {},  # naked call
-    ])
+    if not prop_ids:
+        return []
 
-    for params in query_attempts:
-        all_rows: list[dict] = []
-        for page in range(1, MAX_TX_PAGES + 1):
-            body = await _request("/transactions", {**params, "page": page})
-            if not body:
-                break
-            rows = _unwrap(body)
-            all_rows.extend(rows)
-            summary = (body or {}).get("summary") or {}
-            if not summary.get("more_records"):
-                break
-        if all_rows:
-            logger.info("Rentec /transactions returned %d rows with params=%s", len(all_rows), params)
-            _cache[cache_key] = (time.time(), all_rows)
-            return all_rows
+    # Fetch in parallel batches (10 at a time to be polite to the API)
+    BATCH = 10
+    all_rows: list[dict] = []
+    for i in range(0, len(prop_ids), BATCH):
+        batch = prop_ids[i:i + BATCH]
+        results = await asyncio.gather(
+            *[_transactions_for_property(pid, age) for pid in batch],
+            return_exceptions=True,
+        )
+        for r in results:
+            if isinstance(r, list):
+                all_rows.extend(r)
 
-    _cache[cache_key] = (time.time(), [])
-    return []
+    logger.info("Rentec aggregated transactions: %d rows across %d properties", len(all_rows), len(prop_ids))
+    _cache[cache_key] = (time.time(), all_rows)
+    return all_rows
 
 
 # ─── Sync everything ──────────────────────────────────────────────────────
