@@ -119,8 +119,10 @@ async def _transactions_for_property(prop_id: int, age: str) -> list[dict]:
         rows = _unwrap(body)
         all_rows.extend(rows)
         summary = (body or {}).get("summary") or {}
-        if not summary.get("more_records"):
+        if not rows or not summary.get("more_records"):
             break
+    if all_rows:
+        logger.info("Rentec transactions[property_id=%s, age=%s]: %d rows", prop_id, age, len(all_rows))
     return all_rows
 
 
