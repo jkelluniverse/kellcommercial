@@ -108,7 +108,7 @@ export default function Dashboard() {
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-xs">
                   <KV label="Active leases" v={summary.lease_count} />
-                  <KV label="Paid this month" v={summary.paid_count} />
+                  <KV label="Balance due" v={`$${(summary.total_balance_due || 0).toLocaleString()}`} />
                   <KV label="Last synced" v={summary.synced_at ? new Date(summary.synced_at).toLocaleString() : "never"} />
                 </div>
                 {!summary.configured && (

@@ -105,29 +105,52 @@ async def get_leases() -> list[dict]:
 
 
 # ─── Transactions (paginated, 300/page) ───────────────────────────────────
-async def get_transactions(age: str = "365d") -> list[dict]:
-    """Pull all transactions from the last `age` window (default ~1 year).
+async def get_transactions(age: Optional[str] = None) -> list[dict]:
+    """Pull transactions. Tries a few common queries to handle the case where
+    Rentec requires a filter to return any rows.
 
     Rentec paginates transactions at 300/page. We stop when `summary.more_records`
     is false or we hit MAX_TX_PAGES.
     """
-    cache_key = f"transactions:{age}"
+    cache_key = f"transactions:{age or 'auto'}"
     cached = _cache.get(cache_key)
     if cached and (time.time() - cached[0]) < CACHE_TTL:
         return cached[1]
 
-    all_rows: list[dict] = []
-    for page in range(1, MAX_TX_PAGES + 1):
-        body = await _request("/transactions", {"page": page, "age": age})
-        if not body:
-            break
-        rows = _unwrap(body)
-        all_rows.extend(rows)
-        summary = (body or {}).get("summary") or {}
-        if not summary.get("more_records"):
-            break
-    _cache[cache_key] = (time.time(), all_rows)
-    return all_rows
+    # Try several param sets — some Rentec accounts require at least one filter
+    from datetime import datetime, timedelta
+    today = datetime.utcnow().date()
+    one_year_ago = (today - timedelta(days=365)).isoformat()
+    five_years_ago = (today - timedelta(days=365 * 5)).isoformat()
+
+    query_attempts: list[dict] = []
+    if age:
+        query_attempts.append({"age": age})
+    query_attempts.extend([
+        {"start_date": one_year_ago, "end_date": today.isoformat()},
+        {"start_date": five_years_ago, "end_date": today.isoformat()},
+        {"age": "365d"},
+        {},  # naked call
+    ])
+
+    for params in query_attempts:
+        all_rows: list[dict] = []
+        for page in range(1, MAX_TX_PAGES + 1):
+            body = await _request("/transactions", {**params, "page": page})
+            if not body:
+                break
+            rows = _unwrap(body)
+            all_rows.extend(rows)
+            summary = (body or {}).get("summary") or {}
+            if not summary.get("more_records"):
+                break
+        if all_rows:
+            logger.info("Rentec /transactions returned %d rows with params=%s", len(all_rows), params)
+            _cache[cache_key] = (time.time(), all_rows)
+            return all_rows
+
+    _cache[cache_key] = (time.time(), [])
+    return []
 
 
 # ─── Sync everything ──────────────────────────────────────────────────────

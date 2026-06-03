@@ -457,71 +457,86 @@ async def rentec_raw(user: dict = Depends(current_user)):
 # ─── Rent status — current month summary
 @api.get("/rent-status/summary")
 async def rent_status_summary(user: dict = Depends(current_user)):
-    """Builds a current-month summary from the Rentec snapshot (or empty)."""
+    """Build a current-month rent summary from the Rentec snapshot.
+
+    Rentec's data model (from API V3 spec):
+    - `monthly_rent` lives on the PROPERTY, not the lease
+    - A lease has `property_id` + `renter_id` + `lease_begin/lease_end` + `balance`
+    - A lease is active if `move_out` is null
+    - Transactions are in `/transactions` endpoint
+    """
     snap = await db.rentec_snapshot.find_one({"_singleton": True}) or {}
+    properties = snap.get("properties", [])
     leases = snap.get("leases", [])
     transactions = snap.get("transactions", [])
 
-    now = datetime.now(timezone.utc)
-    month, year = now.month, now.year
-    month_prefix = f"{year}-{month:02d}"
+    # Build a property-id → monthly_rent map
+    rent_by_property: dict[int, float] = {}
+    for p in properties:
+        if not isinstance(p, dict):
+            continue
+        pid = p.get("property_id") or p.get("id")
+        rent = p.get("monthly_rent")
+        if pid is not None and isinstance(rent, (int, float)) and rent > 0:
+            rent_by_property[pid] = float(rent)
 
-    # Sum expected — try a wide range of field names Rentec might use
-    rent_field_candidates = (
-        "total_recurring_rent", "totalRecurringRent",
-        "monthly_rent", "monthlyRent",
-        "rent", "rent_amount", "rentAmount",
-        "amount",
-    )
+    # Active leases = no move_out date
     total_expected = 0.0
+    total_balance_due = 0.0
     active_leases = 0
+    leased_property_ids = set()
     for l in leases:
         if not isinstance(l, dict):
             continue
-        # only count active leases
-        status = str(l.get("status") or l.get("active") or "").lower()
-        if status and status in {"ended", "expired", "inactive", "false"}:
+        if l.get("move_out"):
             continue
         active_leases += 1
-        for k in rent_field_candidates:
-            v = l.get(k)
-            if isinstance(v, (int, float)) and v > 0:
-                total_expected += float(v)
-                break
+        pid = l.get("property_id")
+        if pid in rent_by_property and pid not in leased_property_ids:
+            total_expected += rent_by_property[pid]
+            leased_property_ids.add(pid)
+        bal = l.get("balance")
+        if isinstance(bal, (int, float)) and bal > 0:
+            total_balance_due += float(bal)
 
-    # Sum collected — any positive transaction in current month
-    date_field_candidates = ("date", "transaction_date", "paymentDate", "tdate")
-    amount_field_candidates = ("amount", "amount_received", "amountReceived", "total")
+    # Sum current-month inflows from transactions
+    now = datetime.now(timezone.utc)
+    month_prefix = f"{now.year}-{now.month:02d}"
     total_collected = 0.0
     paid_count = 0
     for t in transactions:
         if not isinstance(t, dict):
             continue
         d = ""
-        for k in date_field_candidates:
+        for k in ("date", "transaction_date", "tdate", "paymentDate"):
             v = t.get(k)
             if isinstance(v, str) and v:
                 d = v
                 break
         if not d.startswith(month_prefix):
             continue
-        for k in amount_field_candidates:
+        amt = 0.0
+        for k in ("amount", "amount_received", "amountReceived", "total"):
             v = t.get(k)
-            if isinstance(v, (int, float)) and v > 0:
-                total_collected += float(v)
-                paid_count += 1
+            if isinstance(v, (int, float)):
+                amt = float(v)
                 break
+        if amt > 0:
+            total_collected += amt
+            paid_count += 1
 
     collection_rate = round((total_collected / total_expected) * 100, 1) if total_expected > 0 else 0.0
 
     return {
-        "month": month,
-        "year": year,
+        "month": now.month,
+        "year": now.year,
         "total_expected": round(total_expected, 2),
         "total_collected": round(total_collected, 2),
         "collection_rate": collection_rate,
+        "total_balance_due": round(total_balance_due, 2),
         "paid_count": paid_count,
         "lease_count": active_leases,
+        "transactions_count": len(transactions),
         "synced_at": snap.get("synced_at"),
         "configured": rentec_mod.has_key(),
     }
