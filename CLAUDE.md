@@ -5,8 +5,12 @@ Project context for Claude Code. Read this fully at the start of every session.
 ## What this project is
 This repo (`kellcommercial`) is a **duplicate of the Nice City Homes (NCH) app**,
 being transformed into a **lighter, rebranded app called "Kell Commercial."**
-It serves a personal/family property portfolio: ~25 existing personal properties
-**plus** one new Kell Commercial building that has multiple leasable units.
+
+"Kell Commercial" is the family/personal portfolio (Dad's portfolio). It recently
+acquired a commercial building ("the Kell Building") with several leasable units;
+since the portfolio had no brand name, everything is grouped under the name "Kell
+Commercial." It all lives together in Rentec Direct. Nice City Homes is a separate
+business (with its own separate app) run by the same people.
 
 Scope is intentionally small — only three jobs:
 1. Record keeping (properties, units, tenants, leases, documents)
@@ -16,19 +20,27 @@ Scope is intentionally small — only three jobs:
 Reuse the existing working code. Do not rebuild from scratch.
 
 ## RULE #1 — data separation (non-negotiable)
-**This app must contain ZERO Nice City Homes data, branding, or references.**
-Kell Commercial is a completely separate entity from NCH. NCH data and Kell
-Commercial data must never touch — no shared records, names, addresses, phone
-numbers, logos, colors, loan-group labels, seed data, env vars, or links.
-If you are ever unsure whether something is NCH-specific, remove it.
+Two separate entities, same operators. Apply this distinction precisely:
 
-Before treating the rebrand as done, run the audit and resolve **every** hit:
+- **SHARED (acceptable in this app):** the people — operator/contact names,
+  **phone numbers, email addresses.** Same humans run both businesses, so shared
+  contact info is expected. Do not strip a contact detail just because it also
+  appears in NCH.
+- **NEVER SHARED (no exceptions):** **property, unit, tenant, lease, transaction,
+  balance, and any financial data.** This app pulls only Kell Commercial's Rentec
+  data and must never reference, import, mix, combine, or cross-link anything with
+  Nice City Homes.
+- **BRANDING must be Kell Commercial, not NCH:** replace the "Nice City Homes"
+  name, logo, tagline, and crimson color everywhere (brand identity, not contact info).
+
+Before treating the rebrand as done, run the audit and work the report:
 ```
 python3 kc_build.py scan .            # read-only audit -> NCH_AUDIT_REPORT.md
 python3 kc_build.py scan . --apply    # apply only the safe brand-string swaps
 ```
-The SAFE count must reach 0; resolve every REVIEW item by hand; replace any
-flagged binary logo asset with the Kell Commercial logo.
+Apply the safe brand swaps; for each REVIEW item, decide by the rule above (keep
+shared contact info; remove NCH brand identity and any NCH entity data). Replace
+any flagged binary logo asset with the Kell Commercial logo.
 
 ## Files already in this repo (built and tested — start from these)
 - `kc_build.py` — NCH scrubber/auditor + artifact generator. Run it first.
@@ -84,7 +96,7 @@ Use `rentec_client.py`; full detail in `RENTEC_SYNC_SPEC.md`. Key facts:
 
 ## Pre-commit checklist
 - [ ] `kc_build.py scan .` shows 0 SAFE hits and all REVIEW items resolved
-- [ ] No NCH name/logo/color/address/phone/loan-group/seed data anywhere
+- [ ] No NCH brand identity (name/logo/color/tagline) and no NCH property/financial/transaction data anywhere (shared contact info like phone/email is OK)
 - [ ] No secrets or API keys in tracked files
 - [ ] Rentec calls stay within 60/min and handle 429
 - [ ] Only the five core areas remain: Properties & Units · Tenants & Leases · Payments · Documents · Tasks
