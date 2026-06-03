@@ -61,10 +61,9 @@ Open the backend service → **Variables** and add:
 | `ADMIN_PASSWORD` | a strong password you choose |
 | `VIEWER_EMAIL` | `mikekell@nicecityhomes.com` |
 | `VIEWER_PASSWORD` | a strong password you choose |
-| `RENTEC_API_KEY` | your Rentec Open API key from Settings → Utilities → API Keys |
-| `RENTEC_BASE_URL` | `https://secure.rentecdirect.com/api/v1` *(verify with Rentec docs)* |
-| `GOOGLE_DRIVE_FOLDER_ID` | `1Wq0VQOi3Vb57Ij0oHyxljyADapBgr2DY` |
-| `GOOGLE_SERVICE_ACCOUNT_JSON` | paste the **entire** service-account JSON content as one line |
+| `RENTEC_API_KEY` | your Rentec Open API key from Settings → Utilities → API Keys (read-only) |
+| `RENTEC_BASE_URL` | `https://secure.rentecdirect.com/api/v3` |
+| `RENTEC_SYNC_INTERVAL_MIN` | `60` (how often the background sync runs) |
 | `GMAIL_USER` | `jacob@nicecityhomes.com` |
 | `GMAIL_APP_PASSWORD` | a 16-char Gmail App Password (see step 5) |
 | `EMAIL_FROM_NAME` | `Kell Commercial` |
@@ -131,20 +130,6 @@ email.
 
 ---
 
-## 6. Google Drive — share the folder
-
-1. Open the Drive folder `1Wq0VQOi3Vb57Ij0oHyxljyADapBgr2DY` in a browser.
-2. Click **Share** → add `app-drive-service-account@nch-operations-app.iam.gserviceaccount.com`
-   with **Viewer** permission.
-3. Make sure the `GOOGLE_SERVICE_ACCOUNT_JSON` variable on Railway is the full
-   one-line JSON for that service account. Get it from GCP Console →
-   IAM & Admin → Service Accounts → (the account) → Keys → Add Key → Create New
-   Key → JSON.
-
-Test from inside the app: Documents → search for any term.
-
----
-
 ## 7. Connect the kellcommercial.com domain
 
 ### 7a. In Railway
@@ -180,10 +165,10 @@ usually completes within a few minutes once the DNS resolves.
 
 - [ ] `https://kellcommercial.com` loads the login screen with the KELL logo.
 - [ ] Admin login (Jacob) lets you create properties, units, tenants, leases.
-- [ ] Viewer login (Mike) is read-only (the New / Edit buttons hide).
-- [ ] Dashboard **Sync Rentec** button returns counts > 0
+- [ ] Viewer login (Dad) is read-only (the New / Edit buttons hide).
+- [ ] Dashboard **Refresh** button returns counts > 0
       *(if 0: confirm `RENTEC_BASE_URL` matches Rentec docs)*.
-- [ ] Documents search returns Drive results.
+- [ ] Past-due accounts and balances show on the dashboard after a sync.
 - [ ] Manually adding a payment fires the Gmail notification to both users.
 
 ---
@@ -217,14 +202,10 @@ set. The app fails fast if any required env var is missing.
 matches the exact origin (scheme + host, no trailing slash) the browser sees,
 and that the frontend's `REACT_APP_BACKEND_URL` points at the backend's domain.
 
-**Rentec sync returns 0 properties:** the V3 Open API endpoint paths may not
-match the defaults. Open `backend/rentec.py` and adjust `_list()` resource paths
-to match the official Rentec OpenAPI spec (look in your Rentec Utilities →
-API Keys → "View Open API Documentation").
-
-**Drive search returns "Drive not configured":** double-check that
-`GOOGLE_SERVICE_ACCOUNT_JSON` is the full JSON (starts with `{` and ends with
-`}`) and that the Drive folder is shared with the service account email.
+**Rentec sync returns 0 properties:** confirm `RENTEC_API_KEY` is set with read
+permissions and `RENTEC_BASE_URL` matches the official Rentec OpenAPI spec
+(Rentec → Utilities → API Keys → "View Open API Documentation"). Use
+`GET /api/rentec/debug-transactions` (admin) to probe the live account.
 
 **Gmail "Username and Password not accepted":** App Password not set or wrong.
 Regenerate at <https://myaccount.google.com/apppasswords>.

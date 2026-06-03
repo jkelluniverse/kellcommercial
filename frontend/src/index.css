@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  --brand-red: #b91c1c;
+  --brand-red: #a8201a;
   --brand-gold: #c9a961;
   --paper: #ffffff;
   --paper-warm: #faf7f0;
@@ -18,13 +18,13 @@ html, body, #root {
   -webkit-font-smoothing: antialiased;
 }
 
-::selection { background: #b91c1c; color: #fff; }
+::selection { background: #a8201a; color: #fff; }
 
 /* Custom scrollbar */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: #faf7f0; }
 ::-webkit-scrollbar-thumb { background: #d4caa8; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #b91c1c; }
+::-webkit-scrollbar-thumb:hover { background: #a8201a; }
 
 /* Components */
 @layer components {
@@ -54,5 +54,5 @@ html, body, #root {
   position: absolute;
   left: 0; top: 8px; bottom: 8px;
   width: 3px;
-  background: #b91c1c;
+  background: #a8201a;
 }

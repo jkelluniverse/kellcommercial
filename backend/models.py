@@ -120,64 +120,6 @@ class Task(TaskIn):
     completed_at: Optional[str] = None
 
 
-# ---- Expense
-class ExpenseIn(BaseModel):
-    description: str
-    category: str
-    amount: float
-    expense_date: str  # YYYY-MM-DD
-    property_id: Optional[str] = None
-    payment_method: Optional[str] = None
-    payee: Optional[str] = None
-    tax_year: Optional[int] = None
-    notes: Optional[str] = None
-    receipt_url: Optional[str] = None
-
-
-class Expense(ExpenseIn):
-    id: str = Field(default_factory=_new_id)
-    submitted_by: str  # email
-    created_at: str = Field(default_factory=_now_iso)
-
-
-# ---- Utility account & tenant application
-class UtilityAccountIn(BaseModel):
-    property_id: Optional[str] = None
-    property_address: str
-    account_holder: str
-    email: EmailStr
-    electric_provider: Optional[str] = None
-    electric_account: Optional[str] = None
-    gas_provider: Optional[str] = None
-    gas_account: Optional[str] = None
-    water_provider: Optional[str] = None
-    water_account: Optional[str] = None
-
-
-class UtilityAccount(UtilityAccountIn):
-    id: str = Field(default_factory=_new_id)
-    created_at: str = Field(default_factory=_now_iso)
-
-
-class TenantApplicationIn(BaseModel):
-    property_address: str
-    full_legal_name: str
-    email: EmailStr
-    phone: str
-    move_in_date: str
-    employer: Optional[str] = None
-    monthly_income: Optional[str] = None
-    occupants: Optional[str] = None
-    pets: Optional[str] = None
-    notes: Optional[str] = None
-
-
-class TenantApplication(TenantApplicationIn):
-    id: str = Field(default_factory=_new_id)
-    status: Literal["new", "reviewing", "approved", "declined"] = "new"
-    created_at: str = Field(default_factory=_now_iso)
-
-
 # ---- Notification settings (per-user toggles)
 class NotificationPrefs(BaseModel):
     payment_received: bool = True

@@ -28,5 +28,6 @@ export function formatApiError(err) {
   return String(d);
 }
 
-export const LOGO_URL =
-  "https://customer-assets.emergentagent.com/job_rentec-integration/artifacts/g37cogzi_kell%20comm%20logo%20transparent.png";
+// Served from frontend/public (and committed at assets/kellcommercial-logo.svg).
+// Drop a raster PNG at the same path to override the bundled SVG wordmark.
+export const LOGO_URL = "/kellcommercial-logo.svg";

@@ -7,11 +7,7 @@ import Dashboard from "./pages/Dashboard";
 import Properties from "./pages/Properties";
 import Tenants from "./pages/Tenants";
 import Payments from "./pages/Payments";
-import Documents from "./pages/Documents";
 import Tasks from "./pages/Tasks";
-import Expenses from "./pages/Expenses";
-import Utilities from "./pages/Utilities";
-import Applications from "./pages/Applications";
 
 function Protected({ children }) {
   const { user, checking } = useAuth();
@@ -33,14 +29,10 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<Protected><Dashboard /></Protected>} />
-          <Route path="/properties" element={<Protected><Properties /></Protected>} />
-          <Route path="/tenants" element={<Protected><Tenants /></Protected>} />
           <Route path="/payments" element={<Protected><Payments /></Protected>} />
-          <Route path="/documents" element={<Protected><Documents /></Protected>} />
+          <Route path="/tenants" element={<Protected><Tenants /></Protected>} />
+          <Route path="/properties" element={<Protected><Properties /></Protected>} />
           <Route path="/tasks" element={<Protected><Tasks /></Protected>} />
-          <Route path="/expenses" element={<Protected><Expenses /></Protected>} />
-          <Route path="/utilities" element={<Protected><Utilities /></Protected>} />
-          <Route path="/applications" element={<Protected><Applications /></Protected>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
