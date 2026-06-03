@@ -465,16 +465,19 @@ async def rentec_debug_transactions(user: dict = Depends(admin_only)):
         for a in attempts:
             try:
                 r = await client.get(f"{base}/transactions", headers=headers, params=a["params"])
-                body_preview = r.text[:400]
+                raw_text = r.text[:600]
+                parsed = None
                 try:
-                    j = r.json()
-                    if isinstance(j, dict):
-                        data = j.get("data")
-                        summary = j.get("summary")
-                        body_preview = f"summary={summary} | data_len={len(data) if isinstance(data, list) else 'not-list'} | first={data[0] if isinstance(data, list) and data else None}"
+                    parsed = r.json()
                 except Exception:
                     pass
-                out.append({"attempt": a["name"], "params": a["params"], "status": r.status_code, "body": body_preview})
+                out.append({
+                    "attempt": a["name"],
+                    "params": a["params"],
+                    "status": r.status_code,
+                    "raw_body": raw_text,
+                    "parsed": parsed,
+                })
             except Exception as e:
                 out.append({"attempt": a["name"], "params": a["params"], "error": str(e)})
     return {"base_url": base, "key_set": bool(key), "attempts": out}
