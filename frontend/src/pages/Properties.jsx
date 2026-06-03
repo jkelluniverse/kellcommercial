@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api, formatApiError } from "../lib/api";
-import { PageHeader, Card, Empty } from "../components/UI";
+import { PageHeader, Empty } from "../components/UI";
 import { useAuth } from "../lib/auth";
 import { Plus, Trash2, ChevronRight } from "lucide-react";
 
@@ -15,7 +15,7 @@ export default function Properties() {
     const { data } = await api.get("/properties");
     setItems(data);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const create = async (form) => {
     setErr("");

@@ -442,45 +442,122 @@ async def rentec_snapshot(user: dict = Depends(current_user)):
 
 
 @api.get("/rentec/debug-transactions")
+@api.get("/rentec/transactions-debug")
 async def rentec_debug_transactions(user: dict = Depends(admin_only)):
-    """Direct probe of Rentec /transactions. Returns the raw status + body of
-    multiple query attempts so we can see exactly what Rentec is sending back.
+    """Comprehensive probe of Rentec /transactions and related endpoints.
+
+    Rentec V3 requires `/transactions` to be scoped by at least one of
+    property_id / renter_id / bank_id / category_id. We therefore pull a
+    real property_id from /properties first, then hammer the endpoint with
+    every documented variation so we can see exactly what's happening.
     """
     import httpx
     from datetime import datetime as _dt, timedelta as _td
+
     key = os.environ.get("RENTEC_API_KEY", "")
     base = os.environ.get("RENTEC_BASE_URL", "https://secure.rentecdirect.com/api/v3").rstrip("/")
     today = _dt.utcnow().date()
-    attempts = [
-        {"name": "no-params", "params": {}},
-        {"name": "age-30d", "params": {"age": "30d"}},
-        {"name": "age-90d", "params": {"age": "90d"}},
-        {"name": "explicit-30day-window", "params": {"start_date": (today - _td(days=30)).isoformat(), "end_date": today.isoformat()}},
-        {"name": "explicit-365day-window", "params": {"start_date": (today - _td(days=365)).isoformat(), "end_date": today.isoformat()}},
-        {"name": "with-page-1", "params": {"page": 1, "age": "30d"}},
-    ]
-    out = []
-    headers = {"X-API-Key": key, "Accept": "application/json"}
-    async with httpx.AsyncClient(timeout=15) as client:
-        for a in attempts:
+    headers = {
+        "X-API-Key": key,
+        "Authorization": f"Bearer {key}",
+        "Accept": "application/json",
+    }
+
+    def _redact(s: str) -> str:
+        return s.replace(key, "***REDACTED***") if key and key in s else s
+
+    async def _probe(client, path: str, params: dict) -> dict:
+        try:
+            r = await client.get(f"{base}{path}", headers=headers, params=params)
+            raw_text = _redact(r.text[:800])
+            parsed = None
+            data_len = None
+            summary = None
             try:
-                r = await client.get(f"{base}/transactions", headers=headers, params=a["params"])
-                raw_text = r.text[:600]
-                parsed = None
-                try:
-                    parsed = r.json()
-                except Exception:
-                    pass
-                out.append({
-                    "attempt": a["name"],
-                    "params": a["params"],
-                    "status": r.status_code,
-                    "raw_body": raw_text,
-                    "parsed": parsed,
-                })
-            except Exception as e:
-                out.append({"attempt": a["name"], "params": a["params"], "error": str(e)})
-    return {"base_url": base, "key_set": bool(key), "attempts": out}
+                parsed = r.json()
+                if isinstance(parsed, dict):
+                    d = parsed.get("data")
+                    if isinstance(d, list):
+                        data_len = len(d)
+                    elif isinstance(d, dict):
+                        data_len = 1
+                    summary = parsed.get("summary")
+            except Exception:
+                pass
+            return {
+                "path": path,
+                "params": params,
+                "status": r.status_code,
+                "ok": r.is_success,
+                "data_len": data_len,
+                "summary": summary,
+                "raw_body": raw_text,
+            }
+        except Exception as e:
+            return {"path": path, "params": params, "error": str(e)}
+
+    out: dict = {
+        "base_url": base,
+        "key_set": bool(key),
+        "key_length": len(key) if key else 0,
+        "today": today.isoformat(),
+        "probes": [],
+    }
+
+    async with httpx.AsyncClient(timeout=20) as client:
+        # 1) Sanity check — does the key work at all?
+        out["probes"].append(await _probe(client, "/ping", {}))
+
+        # 2) List properties (we need a real ID to scope transactions).
+        props_resp = await _probe(client, "/properties", {"include_subunits": "true"})
+        out["probes"].append(props_resp)
+        prop_id = None
+        prop_ids: list = []
+        try:
+            r2 = await client.get(f"{base}/properties", headers=headers, params={"include_subunits": "true"})
+            data = (r2.json() or {}).get("data") or []
+            for p in data:
+                if isinstance(p, dict):
+                    pid = p.get("property_id") or p.get("id")
+                    if isinstance(pid, int):
+                        prop_ids.append(pid)
+            prop_id = prop_ids[0] if prop_ids else None
+        except Exception as e:
+            out["properties_lookup_error"] = str(e)
+        out["sample_property_id"] = prop_id
+        out["all_property_ids"] = prop_ids[:10]
+
+        # 3) Unscoped /transactions calls — these should fail per Rentec docs
+        out["probes"].append(await _probe(client, "/transactions", {}))
+        out["probes"].append(await _probe(client, "/transactions", {"age": "365d"}))
+        out["probes"].append(await _probe(client, "/transactions", {
+            "start_date": (today - _td(days=365)).isoformat(),
+            "end_date": today.isoformat(),
+        }))
+
+        # 4) Scoped by property_id (Rentec requires this)
+        if prop_id is not None:
+            out["probes"].append(await _probe(client, "/transactions", {"property_id": prop_id}))
+            out["probes"].append(await _probe(client, "/transactions", {"property_id": prop_id, "age": "365d"}))
+            out["probes"].append(await _probe(client, "/transactions", {"property_id": prop_id, "age": "30d"}))
+            out["probes"].append(await _probe(client, "/transactions", {"property_id": prop_id, "age": "all"}))
+            out["probes"].append(await _probe(client, "/transactions", {
+                "property_id": prop_id,
+                "start_date": (today - _td(days=365)).isoformat(),
+                "end_date": today.isoformat(),
+            }))
+            out["probes"].append(await _probe(client, "/transactions", {
+                "property_id": prop_id,
+                "page": 1,
+                "page_size": 50,
+            }))
+
+        # 5) Also probe related ledger-ish endpoints in case the path is different
+        out["probes"].append(await _probe(client, "/rent-status", {}))
+        if prop_id is not None:
+            out["probes"].append(await _probe(client, "/rent-status", {"property_id": prop_id}))
+
+    return out
 
 
 @api.get("/rentec/raw")
