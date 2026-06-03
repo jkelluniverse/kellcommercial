@@ -1,0 +1,4217 @@
+openapi: 3.0.0
+info:
+  title: Rentec Direct API v3
+  x-logo:
+    url: /owners/images/rentec_logo_220w.png
+    altText: Rentec Direct Logo
+  description: |
+    Welcome to the Rentec Direct API v3. This API provides access to your Rentec Direct data in JSON format.
+    
+    The Rentec Open API is a [Rentec Labs](https://help.rentecdirect.com/article/699-what-is-rentec-labs) feature.
+    
+    ### Authentication
+    API keys can be generated in the Rentec Direct interface at Settings -> Utilities -> API Keys. 
+    You can create multiple keys with granular permissions (e.g., "read:properties", "write:work_orders"). 
+    Each key is restricted to the specific actions and methods assigned to it.
+    Read permissions allow `GET` requests, while Write permissions allow `POST` requests for the specified resource.
+
+    ### Rate Limiting
+    The API is rate limited to **60 requests per minute** per user. If you exceed this limit, the API will return a `429 Too Many Requests` status code.
+    
+    ### Changelog
+    For a detailed history of changes, see the [Changelog](changelog.html).
+  version: 3.0.1
+servers:
+  - url: /api/v3
+    description: Relative server URL
+  - url: https://secure.rentecdirect.com/api/v3
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: Verify API connection and authentication
+  - name: Properties
+    description: Manage and list properties
+  - name: Tenants
+    description: Access tenant information
+  - name: Leads
+    description: Access lead information (prospects)
+  - name: Owners
+    description: Access owner information
+  - name: Vendors
+    description: Access vendor information
+  - name: Leases
+    description: Access rental agreement details
+  - name: Transactions
+    description: Access financial records
+  - name: Accounts
+    description: Manage account categories
+  - name: Products
+    description: Manage product categories
+  - name: Banks
+    description: Access bank account information
+  - name: Work Orders
+    description: Manage maintenance Work Orders
+  - name: Files
+    description: Upload and manage files
+  - name: Messaging
+    description: Manage communication records and messages
+  - name: Lookup
+    description: Search for contacts across multiple types
+  - name: Accounting
+    description: Financial and accounting resources
+
+x-tagGroups:
+  - name: Authentication
+    tags:
+      - Authentication
+  - name: Properties
+    tags:
+      - Properties
+  - name: Contacts
+    tags:
+      - Tenants
+      - Leads
+      - Owners
+      - Vendors
+      - Lookup
+  - name: Leases
+    tags:
+      - Leases
+  - name: Work Orders
+    tags:
+      - Work Orders
+  - name: Messaging
+    tags:
+      - Messaging
+  - name: Files
+    tags:
+      - Files
+  - name: Accounting
+    tags:
+      - Transactions
+      - Accounts
+      - Products
+      - Banks
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    BearerAuth:
+      type: http
+      scheme: bearer
+
+  parameters:
+    data_only:
+      in: query
+      name: data_only
+      schema:
+        type: boolean
+      description: Set to true to return raw data without summary envelope.
+
+  schemas:
+    Summary:
+      type: object
+      properties:
+        records:
+          type: integer
+          description: Total number of records returned in this response.
+        timestamp:
+          type: string
+          format: date-time
+          description: Server timestamp when the response was generated.
+
+    TransactionSummary:
+      allOf:
+        - $ref: '#/components/schemas/Summary'
+        - type: object
+          properties:
+            starting_balance:
+              type: number
+              format: float
+              description: The balance at the beginning of the current response set (page).
+            ending_balance:
+              type: number
+              format: float
+              description: The balance at the end of the current response set (page).
+            page:
+              type: integer
+              description: The current page number (1-based).
+              minimum: 1
+            page_size:
+              type: integer
+              description: The number of records per page.
+            more_records:
+              type: boolean
+              description: Indicates if there are more records available beyond the current set.
+            next_page_url:
+              type: string
+              format: uri
+              nullable: true
+              description: The URL to the next page of results, including all current parameters.
+
+    Property:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique global identifier in the format 'property:ID'.
+        property_id:
+          type: integer
+        owner_id:
+          type: integer
+        sub_of:
+          type: integer
+          nullable: true
+        nickname:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        zip:
+          type: string
+        monthly_rent:
+          type: number
+        security_dep:
+          type: number
+        archived:
+          type: boolean
+        notes:
+          type: string
+        ptype:
+          type: string
+        date_created:
+          type: string
+          format: date-time
+        date_updated:
+          type: string
+          format: date-time
+        multiplex:
+          type: boolean
+        multiunits:
+          type: integer
+        default_bank:
+          type: integer
+          description: 'The id of the default income bank account, otherwise 0.'
+        default_bank_expense:
+          type: integer
+          description: 'The id of the default expense bank account, otherwise 0.'
+        renters:
+          type: array
+          items:
+            $ref: '#/components/schemas/PropertyRenter'
+        subunits:
+          type: array
+          items:
+            $ref: '#/components/schemas/Property'
+        marketing:
+          $ref: '#/components/schemas/PropertyMarketing'
+          nullable: true
+
+    PropertyMarketing:
+      type: object
+      properties:
+        bedrooms:
+          type: number
+        bathrooms:
+          type: number
+        sqft:
+          type: integer
+        appliances:
+          type: string
+        description:
+          type: string
+        contact:
+          type: string
+        ad_enable:
+          type: boolean
+        app_enable:
+          type: boolean
+        yearbuilt:
+          type: string
+        leaseterms:
+          type: string
+        synd_enable:
+          type: boolean
+        rental_assistance:
+          type: boolean
+        lease:
+          type: boolean
+        allow_animals:
+          type: boolean
+        allow_smokers:
+          type: boolean
+        wheelchair_access:
+          type: boolean
+        washer_dryer:
+          type: boolean
+        garage_carport:
+          type: boolean
+        air_conditioner:
+          type: boolean
+        longitude:
+          type: number
+        latitude:
+          type: number
+        fiftyfive_plus:
+          type: boolean
+        washer_dryer_hookups:
+          type: boolean
+        files:
+          type: array
+          items:
+            $ref: '#/components/schemas/PropertyMarketingFile'
+          description: List of marketing files (images) for the property.
+
+    PropertyMarketingFile:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique global identifier in the format 'file:ID'.
+        file_id:
+          type: integer
+        filename:
+          type: string
+        bytes:
+          type: integer
+        upload_date:
+          type: string
+          format: date-time
+
+    PropertyRenter:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique global identifier in the format 'tenant:ID'.
+        renter_id:
+          type: integer
+        renter_name:
+          type: string
+        move_in:
+          type: string
+          format: date-time
+        move_out:
+          type: string
+          format: date-time
+        subtenant:
+          type: boolean
+          description: Whether the tenant is a sub-tenant.
+
+    Tenant:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique global identifier in the format 'tenant:ID'.
+        renter_id:
+          type: integer
+        f_name:
+          type: string
+        l_name:
+          type: string
+        company:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        mphone:
+          type: string
+        notes:
+          type: string
+        portal_enable:
+          type: boolean
+        archived:
+          type: boolean
+        subtenant:
+          type: boolean
+          description: Whether the tenant is a sub-tenant.
+        subtenant_of:
+          type: integer
+          nullable: true
+          description: The ID of the primary tenant this tenant is a sub-tenant of. This field is omitted if the tenant is not a sub-tenant. If this is set, properties of the primary tenant are also included in the properties array.
+        subtenants:
+          type: array
+          description: A list of renter_ids for sub-tenants linked to this primary tenant.
+          items:
+            type: integer
+        balance:
+          type: number
+        date_created:
+          type: string
+          format: date-time
+          nullable: true
+        date_updated:
+          type: string
+          format: date-time
+          nullable: true
+        properties:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantProperty'
+
+    TenantProperty:
+      type: object
+      properties:
+        property_id:
+          type: integer
+        nickname:
+          type: string
+        move_in:
+          type: string
+          format: date-time
+        move_out:
+          type: string
+          format: date-time
+
+    Lead:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique global identifier in the format 'lead:ID'.
+        prospect_id:
+          type: integer
+          description: Alias of lead_id.
+        lead_id:
+          type: integer
+          description: Alias of prospect_id for naming convention.
+        f_name:
+          type: string
+        l_name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        mphone:
+          type: string
+          description: mobile phone
+        monthly_income:
+          type: number
+        move_in:
+          type: string
+          format: date-time
+          nullable: true
+          description: move in availability date
+        monthly_rent_min:
+          type: number
+          nullable: true
+          description: minimum monthly rent desired
+        monthly_rent_max:
+          type: number
+          nullable: true
+          description: maximum monthly rent desired
+        occupants:
+          type: integer
+          description: number of occupants in the household
+        allow_animals:
+          type: boolean
+        allow_smokers:
+          type: boolean
+        fiftyfive_plus:
+          type: boolean
+        washer_dryer_hookups:
+          type: boolean
+        wheelchair_access:
+          type: boolean
+        rental_assistance:
+          type: boolean
+        no_lease:
+          type: boolean
+        washer_dryer:
+          type: boolean
+        bedrooms_min:
+          type: integer
+        bathrooms_min:
+          type: integer
+        garage_carport:
+          type: boolean
+        air_conditioner:
+          type: boolean
+        search_city:
+          type: string
+        search_state:
+          type: string
+        longitude:
+          type: number
+        latitude:
+          type: number
+        search_range:
+          type: number
+          description: miles away from their search location to consider
+        notes:
+          type: string
+        date_created:
+          type: string
+          format: date-time
+          nullable: true
+        date_updated:
+          type: string
+          format: date-time
+          nullable: true
+        date_contacted:
+          type: string
+          format: date-time
+          nullable: true
+        archived:
+          type: boolean
+
+    Lease:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique global identifier in the format 'lease:ID'.
+        lease_id:
+          type: integer
+        property_id:
+          type: integer
+        renter_id:
+          type: integer
+        move_in:
+          type: string
+          format: date-time
+        move_out:
+          type: string
+          format: date-time
+        lease_begin:
+          type: string
+          format: date-time
+        lease_end:
+          type: string
+          format: date-time
+        balance:
+          type: number
+        deposit_balance:
+          type: number
+
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique global identifier in the format 'transaction:ID'.
+        transaction_id:
+          type: integer
+        transaction_time:
+          type: string
+          format: date-time
+          description: "Transaction time in ISO 8601 format (e.g., 2026-04-15T10:55:00-07:00). Matches the summary timestamp format."
+        property_id:
+          type: integer
+          nullable: true
+          description: Property ID. This field is hidden if invoice_id is present.
+        renter_id:
+          type: integer
+          nullable: true
+        category_id:
+          type: integer
+          description: Category ID. This field is hidden if invoice_id is present.
+        category_name:
+          type: string
+          description: Category name. This field is hidden if invoice_id is present.
+        description:
+          type: string
+        notes:
+          type: string
+        amount:
+          type: number
+        check_num:
+          type: string
+          description: Check number. This field is hidden if invoice_id is present.
+        pmt_type:
+          type: string
+          description: Payment type. This field is hidden if invoice_id is present.
+        memo:
+          type: string
+        split_id:
+          type: integer
+          nullable: true
+          description: Split ID. This field is hidden if invoice_id is present.
+        invoice_id:
+          type: integer
+          nullable: true
+        invoice_description:
+          type: string
+          nullable: true
+        tcount:
+          type: integer
+          nullable: true
+          description: Number of transactions grouped in this record (e.g., for an invoice or split).
+        vendor_id:
+          type: integer
+          nullable: true
+          description: Vendor ID. This field is hidden if invoice_id is present.
+        owner_id:
+          type: integer
+          nullable: true
+          description: Owner ID. This field is hidden if invoice_id is present.
+        bank_id:
+          type: integer
+          nullable: true
+          description: Bank account ID.
+        files:
+          type: array
+          description: Attached files for this transaction. Included only if files are present.
+          items:
+            type: object
+            properties:
+              file_id:
+                type: integer
+              filename:
+                type: string
+              upload_date:
+                type: string
+                format: date-time
+              bytes:
+                type: integer
+
+    Vendor:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique global identifier in the format 'vendor:ID'.
+        vendor_id:
+          type: integer
+        name:
+          type: string
+        industry:
+          type: string
+        contact:
+          type: string
+        email:
+          type: string
+        address:
+          type: string
+        address2:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        zip:
+          type: string
+        phone:
+          type: string
+        mphone:
+          type: string
+        rate:
+          type: string
+        notes:
+          type: string
+        collected:
+          type: boolean
+        date_created:
+          type: string
+          format: date-time
+          nullable: true
+        date_updated:
+          type: string
+          format: date-time
+          nullable: true
+
+    Owner:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique global identifier in the format 'owner:ID'.
+        owner_id:
+          type: integer
+        f_name:
+          type: string
+        m_name:
+          type: string
+        l_name:
+          type: string
+        company:
+          type: string
+        contact:
+          type: string
+        address:
+          type: string
+        address2:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        zip:
+          type: string
+        phone:
+          type: string
+        mphone:
+          type: string
+        notes:
+          type: string
+        email:
+          type: string
+        portal_enable:
+          type: boolean
+        acct_number:
+          type: string
+        archived:
+          type: boolean
+        date_created:
+          type: string
+          format: date-time
+          nullable: true
+        date_updated:
+          type: string
+          format: date-time
+          nullable: true
+
+    Account:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique global identifier in the format 'account:ID'.
+        account_id:
+          type: integer
+        name:
+          type: string
+        type:
+          type: string
+          enum: [I, E, O, C, A, L, Q, P]
+          description: |
+            Account type:
+            - I: Income
+            - E: Expense
+            - O: Other
+            - A: Asset
+            - L: Liability
+            - Q: Equity
+        class:
+          type: string
+        default:
+          type: boolean
+        archived:
+          type: boolean
+        surcharges:
+          type: array
+          items:
+            $ref: '#/components/schemas/Surcharge'
+
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique global identifier in the format 'product:ID'.
+        name:
+          type: string
+        account_id:
+          type: integer
+        class:
+          type: string
+        default:
+          type: boolean
+        archived:
+          type: boolean
+        surcharges:
+          type: array
+          items:
+            $ref: '#/components/schemas/Surcharge'
+
+    Bank:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique global identifier in the format 'bank:ID'.
+        bank_id:
+          type: integer
+        account_type:
+          type: string
+        account_name:
+          type: string
+        active:
+          type: boolean
+        archived:
+          type: boolean
+        bank_name:
+          type: string
+        bank_address:
+          type: string
+        bank_city:
+          type: string
+        bank_state:
+          type: string
+        bank_zip:
+          type: string
+        routing_number:
+          type: string
+          description: Masked routing number.
+        payments:
+          type: boolean
+        payment_types:
+          type: array
+          items:
+            type: string
+            enum: [ACH, CC]
+
+    Surcharge:
+      type: object
+      properties:
+        id:
+          type: integer
+        category_id:
+          type: integer
+        name:
+          type: string
+        percentage:
+          type: number
+        fixed:
+          type: number
+        active:
+          type: boolean
+        archived:
+          type: boolean
+
+    WorkOrder:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique global identifier in the format 'work_order:ID'.
+        workorder_id:
+          type: integer
+        property_id:
+          type: integer
+          nullable: true
+        renter_id:
+          type: integer
+          nullable: true
+        status:
+          type: string
+          description: |
+            The status of the Work Order.
+            - OpenU: Unassigned (alias for Unassigned)
+            - OpenA: Assigned (alias for Assigned)
+            - Parts: Parts on Order
+            - Work: Work in Progress
+            - Finalized: Finalized
+            - Closed: Closed
+            - Unassigned: (alias for OpenU)
+            - Assigned: (alias for OpenA)
+        assigned:
+          type: string
+        short_desc:
+          type: string
+        description:
+          type: string
+        resolution:
+          type: string
+        date_received:
+          type: string
+          format: date
+        date_created:
+          type: string
+          format: date-time
+        date_assigned:
+          type: string
+          format: date
+        date_resolved:
+          type: string
+          format: date
+        cost:
+          type: number
+        vendor_id:
+          type: integer
+          nullable: true
+        wo_number:
+          type: integer
+        priority:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Priority level (1-5)
+        archived:
+          type: boolean
+        notes:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkOrderNote'
+
+    WorkOrderNote:
+      type: object
+      properties:
+        note_id:
+          type: integer
+        note:
+          type: string
+        private:
+          type: boolean
+        created:
+          type: string
+          format: date-time
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique global identifier in the format 'message:ID'.
+        email_id:
+          type: integer
+        alt_user_id:
+          type: integer
+          nullable: true
+        email_time:
+          type: string
+          format: date-time
+        renter_id:
+          type: integer
+        prospect_id:
+          type: integer
+        owner_id:
+          type: integer
+        vendor_id:
+          type: integer
+        subject:
+          type: string
+        body:
+          type: string
+        status:
+          type: string
+        direction:
+          type: string
+          enum: [IN, OUT]
+
+    File:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique global identifier in the format 'file:ID'.
+        file_id:
+          type: integer
+        property_id:
+          type: integer
+          nullable: true
+        renter_id:
+          type: integer
+          nullable: true
+        owner_id:
+          type: integer
+          nullable: true
+        vendor_id:
+          type: integer
+          nullable: true
+        workorder_id:
+          type: integer
+          nullable: true
+        transaction_id:
+          type: integer
+          nullable: true
+        split_id:
+          type: integer
+          nullable: true
+        filename:
+          type: string
+        bytes:
+          type: integer
+        upload_date:
+          type: string
+          format: date-time
+        last_updated:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        details:
+          type: array
+          items:
+            type: string
+          description: List of detailed error messages, often for validation errors.
+        vendor_id:
+          type: integer
+          description: Vendor ID of the existing vendor if the error is a duplicate vendor name.
+
+security:
+  - ApiKeyAuth: []
+  - BearerAuth: []
+
+paths:
+  /ping:
+    get:
+      tags:
+        - Authentication
+      summary: Connection Check
+      description: Returns minimal data to indicate authentication is successful and which user is authenticated.
+      operationId: ping
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Successful authentication
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: "#/components/schemas/Summary"
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        example: success
+                      message:
+                        type: string
+                        example: Authentication successful
+                      user:
+                        type: object
+                        properties:
+                          user_id:
+                            type: integer
+                          company:
+                            type: string
+                            nullable: true
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Too Many Requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /lookup:
+    get:
+      tags:
+        - Lookup
+      summary: Search for contacts (All Types)
+      description: |
+        Search for contact records across all types (tenants, leads, owners, vendors) using email, phone number, name, or company.
+        Returns matches grouped by contact type.
+
+        For type-specific searches, see:
+        * `/lookup/tenant`
+        * `/lookup/owner`
+        * `/lookup/vendor`
+        * `/lookup/prospect`
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      parameters: &lookupParameters
+        - name: email
+          in: query
+          description: Email address to search for.
+          schema:
+            type: string
+        - name: phone
+          in: query
+          description: Phone number to search for (matches against phone or mphone).
+          schema:
+            type: string
+        - name: f_name
+          in: query
+          description: First name to search for.
+          schema:
+            type: string
+        - name: l_name
+          in: query
+          description: Last name to search for.
+          schema:
+            type: string
+        - name: company
+          in: query
+          description: Company name to search for.
+          schema:
+            type: string
+        - name: flatten
+          in: query
+          description: |
+            If set to true, returns all results in a single flat array instead of grouped by type.
+            Each record will include a `type` field indicating the entity type (e.g., 'tenant', 'lead', 'owner', 'vendor').
+          schema:
+            type: boolean
+            default: false
+        - $ref: '#/components/parameters/data_only'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    oneOf:
+                      - type: object
+                        description: Grouped results by entity type (default).
+                        properties:
+                          tenants:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Tenant'
+                          leads:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Lead'
+                          owners:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Owner'
+                          vendors:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Vendor'
+                      - type: array
+                        description: Flat array of results when flatten=true.
+                        items:
+                          oneOf:
+                            - $ref: '#/components/schemas/Tenant'
+                            - $ref: '#/components/schemas/Lead'
+                            - $ref: '#/components/schemas/Owner'
+                            - $ref: '#/components/schemas/Vendor'
+        '400':
+          description: Bad Request - missing parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too Many Requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /lookup/tenant:
+    get:
+      tags:
+        - Lookup
+      summary: Search for Tenants
+      description: Search for tenant records using email, phone number, name, or company.
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      parameters: *lookupParameters
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Tenant'
+        '400':
+          description: Bad Request - missing parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too Many Requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /lookup/owner:
+    get:
+      tags:
+        - Lookup
+      summary: Search for Owners
+      description: Search for owner records using email, phone number, name, or company.
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      parameters: *lookupParameters
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Owner'
+        '400':
+          description: Bad Request - missing parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too Many Requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /lookup/vendor:
+    get:
+      tags:
+        - Lookup
+      summary: Search for Vendors
+      description: Search for vendor records using email, phone number, name, or company.
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      parameters: *lookupParameters
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Vendor'
+        '400':
+          description: Bad Request - missing parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too Many Requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /lookup/prospect:
+    get:
+      tags:
+        - Lookup
+      summary: Search for Prospects (Leads)
+      description: Search for prospect records using email, phone number, or name.
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      parameters: *lookupParameters
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Lead'
+        '400':
+          description: Bad Request - missing parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too Many Requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /files:
+    get:
+      tags:
+        - Files
+      summary: List files
+      description: Returns a list of the most recent files, optionally filtered by various criteria.
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      parameters:
+        - name: age
+          in: query
+          description: |
+            Filter files by age. Supports simple numeric days (e.g., `30`) or unit-based strings like `30d`, `12h`, `45m`.
+          schema:
+            type: string
+        - name: property_id
+          in: query
+          description: Filter files by property ID.
+          schema:
+            type: integer
+        - name: renter_id
+          in: query
+          description: Filter files by tenant/renter ID.
+          schema:
+            type: integer
+        - name: transaction_id
+          in: query
+          description: Filter files by transaction ID.
+          schema:
+            type: integer
+        - name: workorder_id
+          in: query
+          description: Filter files by workorder ID.
+          schema:
+            type: integer
+        - name: vendor_id
+          in: query
+          description: Filter files by vendor ID.
+          schema:
+            type: integer
+        - name: split_id
+          in: query
+          description: Filter files by split ID.
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/File'
+        '401':
+          description: Unauthorized
+        '429':
+          description: Too Many Requests
+
+    post:
+      tags:
+        - Files
+      summary: Upload a file
+      description: |
+        Uploads a file to the system. The file must be sent as a multi-part form-data request with the key `file`. 
+        You can also provide optional parameters to associate the file with a specific entity.
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The file to upload
+                workorder_id:
+                  type: integer
+                  description: Optional. The ID of the Work Order to associate the file with.
+                renter_id:
+                  type: integer
+                  description: Optional. The ID of the tenant to associate the file with.
+                transaction_id:
+                  type: integer
+                  description: Optional. The ID of the transaction to associate the file with.
+                property_id:
+                  type: integer
+                  description: Optional. The ID of the property to associate the file with.
+                owner_id:
+                  type: integer
+                  description: Optional. The ID of the owner to associate the file with.
+                vendor_id:
+                  type: integer
+                  description: Optional. The ID of the vendor to associate the file with.
+              required:
+                - file
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  file_id:
+                    type: integer
+                  filename:
+                    type: string
+        '200':
+          description: OK - Duplicate file already exists
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  file_id:
+                    type: integer
+                  filename:
+                    type: string
+                  duplicate:
+                    type: boolean
+        '400':
+          description: Invalid input or validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too Many Requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /files/{id}:
+    get:
+      tags:
+        - Files
+      summary: Get file metadata or download content
+      description: |
+        Returns metadata for a specific file. 
+        To download the file content, include the query parameter `download=true`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The ID of the file to retrieve.
+          schema:
+            type: integer
+        - name: download
+          in: query
+          required: false
+          description: Set to `true` to download the file content instead of metadata.
+          schema:
+            type: boolean
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    $ref: '#/components/schemas/File'
+            '*/*':
+              description: The file content (if download=true)
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '429':
+          description: Too Many Requests
+        '500':
+          description: Server Error
+
+  /properties:
+    get:
+      tags:
+        - Properties
+      summary: List all properties
+      x-codeSamples:
+        - lang: 'Shell'
+          label: 'cURL'
+          source: |
+            curl -X GET "https://secure.rentecdirect.com/api/v3/properties?include_subunits=true" \
+              -H "X-API-Key: YOUR_API_KEY"
+        - lang: 'PHP'
+          source: |
+            <?php
+            $client = new GuzzleHttp\Client();
+            $response = $client->request('GET', 'https://secure.rentecdirect.com/api/v3/properties', [
+                'query' => [
+                    'include_subunits' => 'true'
+                ],
+                'headers' => [
+                    'X-API-Key' => 'YOUR_API_KEY',
+                    'Accept' => 'application/json',
+                ],
+            ]);
+            echo $response->getBody();
+        - lang: 'JavaScript'
+          label: 'Node'
+          source: |
+            const axios = require('axios');
+            axios.get('https://secure.rentecdirect.com/api/v3/properties', {
+                params: {
+                    include_subunits: true
+                },
+                headers: {
+                    'X-API-Key': 'YOUR_API_KEY',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => console.log(response.data))
+            .catch(error => console.error(error));
+        - lang: 'Python'
+          label: 'Python'
+          source: |
+            import requests
+            params = {'include_subunits': 'true'}
+            headers = {
+                'X-API-Key': 'YOUR_API_KEY',
+                'Accept': 'application/json'
+            }
+            response = requests.get('https://secure.rentecdirect.com/api/v3/properties', params=params, headers=headers)
+            print(response.json())
+      parameters:
+        - in: query
+          name: include_subunits
+          schema:
+            type: boolean
+          description: Set to true to include nested subunits.
+        - in: query
+          name: sub_of
+          schema:
+            type: integer
+          description: Filter by parent property ID.
+        - in: query
+          name: archived
+          schema:
+            type: boolean
+          description: Include inactive properties.
+        - in: query
+          name: occupied
+          schema:
+            type: boolean
+          description: |
+            Filter by occupancy status.
+            - `true`: Only show properties with current renters.
+            - `false`: Only show vacant properties.
+            - Not specified: Show all properties.
+        - in: query
+          name: marketing
+          schema:
+            type: boolean
+          description: Set to true to include marketing information in a `marketing` object.
+        - in: query
+          name: age
+          schema:
+            type: string
+          description: |
+            Filter properties by age using a value+unit string.
+            Supported units: d (days), m (minutes), s (seconds).
+            Examples: "30d", "15m", "45s". If no unit is provided, days are assumed.
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+          description: Filter properties created on or after this date (YYYY-MM-DD).
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+          description: Filter properties created on or before this date (YYYY-MM-DD).
+        - $ref: '#/components/parameters/data_only'
+      responses:
+        '200':
+          description: A list of properties
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Property'
+
+  /properties/{id}:
+    get:
+      tags:
+        - Properties
+      summary: Get property details
+      x-codeSamples:
+        - lang: 'Shell'
+          label: 'cURL'
+          source: |
+            curl -X GET "https://secure.rentecdirect.com/api/v3/properties/123?include_subunits=true" \
+              -H "X-API-Key: YOUR_API_KEY"
+        - lang: 'PHP'
+          source: |
+            <?php
+            $client = new GuzzleHttp\Client();
+            $response = $client->request('GET', 'https://secure.rentecdirect.com/api/v3/properties/123', [
+                'query' => [
+                    'include_subunits' => 'true'
+                ],
+                'headers' => [
+                    'X-API-Key' => 'YOUR_API_KEY',
+                    'Accept' => 'application/json',
+                ],
+            ]);
+            echo $response->getBody();
+        - lang: 'JavaScript'
+          label: 'Node'
+          source: |
+            const axios = require('axios');
+            axios.get('https://secure.rentecdirect.com/api/v3/properties/123', {
+                params: {
+                    include_subunits: true
+                },
+                headers: {
+                    'X-API-Key': 'YOUR_API_KEY',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => console.log(response.data))
+            .catch(error => console.error(error));
+        - lang: 'Python'
+          label: 'Python'
+          source: |
+            import requests
+            params = {'include_subunits': 'true'}
+            headers = {
+                'X-API-Key': 'YOUR_API_KEY',
+                'Accept': 'application/json'
+            }
+            response = requests.get('https://secure.rentecdirect.com/api/v3/properties/123', params=params, headers=headers)
+            print(response.json())
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: include_subunits
+          schema:
+            type: boolean
+        - in: query
+          name: archived
+          schema:
+            type: boolean
+        - in: query
+          name: occupied
+          schema:
+            type: boolean
+          description: |
+            Filter by occupancy status.
+            - `true`: Return 404 if property is vacant.
+            - `false`: Return 404 if property is occupied.
+        - in: query
+          name: marketing
+          schema:
+            type: boolean
+          description: Set to true to include marketing information in the `marketing` object.
+        - in: query
+          name: age
+          schema:
+            type: string
+          description: |
+            Filter properties by age using a value+unit string.
+            Supported units: d (days), m (minutes), s (seconds).
+            Examples: "30d", "15m", "45s". If no unit is provided, days are assumed.
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+          description: Filter properties created on or after this date (YYYY-MM-DD).
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+          description: Filter properties created on or before this date (YYYY-MM-DD).
+        - $ref: '#/components/parameters/data_only'
+      responses:
+        '200':
+          description: Detailed property information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    $ref: '#/components/schemas/Property'
+        '404':
+          description: Property not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too Many Requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /transactions:
+    get:
+      tags:
+        - Transactions
+      summary: Get transactions
+      description: Returns a list of transactions for specified properties or tenants. Records are returned in ascending order by date.
+      x-codeSamples:
+        - lang: 'Shell'
+          label: 'cURL'
+          source: |
+            curl -X GET "https://secure.rentecdirect.com/api/v3/transactions?property_ids=123,124&age=30" \
+              -H "X-API-Key: YOUR_API_KEY"
+        - lang: 'PHP'
+          source: |
+            <?php
+            $client = new GuzzleHttp\Client();
+            $response = $client->request('GET', 'https://secure.rentecdirect.com/api/v3/transactions', [
+                'query' => [
+                    'property_ids' => '123,124',
+                    'age' => 30
+                ],
+                'headers' => [
+                    'X-API-Key' => 'YOUR_API_KEY',
+                    'Accept' => 'application/json',
+                ],
+            ]);
+            echo $response->getBody();
+        - lang: 'JavaScript'
+          label: 'Node'
+          source: |
+            const axios = require('axios');
+            axios.get('https://secure.rentecdirect.com/api/v3/transactions', {
+                params: {
+                    property_ids: '123,124',
+                    age: 30
+                },
+                headers: {
+                    'X-API-Key': 'YOUR_API_KEY',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => console.log(response.data))
+            .catch(error => console.error(error));
+        - lang: 'Python'
+          label: 'Python'
+          source: |
+            import requests
+            params = {
+                'property_ids': '123,124',
+                'age': 30
+            }
+            headers = {
+                'X-API-Key': 'YOUR_API_KEY',
+                'Accept': 'application/json'
+            }
+            response = requests.get('https://secure.rentecdirect.com/api/v3/transactions', params=params, headers=headers)
+            print(response.json())
+      parameters:
+        - in: query
+          name: property_id
+          schema:
+            type: integer
+          description: Property ID.
+        - in: query
+          name: renter_id
+          schema:
+            type: integer
+          description: Tenant (renter) ID.
+        - in: query
+          name: bank_id
+          schema:
+            type: integer
+          description: Bank account ID to filter transactions by.
+        - in: query
+          name: category_id
+          schema:
+            type: integer
+          description: Category ID (Asset, Liability, or Equity) to filter transactions by.
+        - in: query
+          name: age
+          schema:
+            type: string
+          description: |
+            Filter transactions by age using a value+unit string.
+            Supported units: d (days), h (hours), m (minutes), s (seconds).
+            Examples: "30d", "12h", "15m", "45s". If no unit is provided, days are assumed.
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: page
+          description: Page number for pagination (1-based). Each page returns up to 300 records.
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+      responses:
+        '200':
+          description: A list of transactions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/TransactionSummary'
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Transaction'
+        '400':
+          description: Invalid request (e.g., more than one of property_id, renter_id, bank_id, or category_id specified)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Access denied or ID not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /transactions/expense:
+    post:
+      tags:
+        - Transactions
+      summary: Create an expense transaction
+      description: Creates a new expense transaction. After creation, you can upload or attach invoices or receipts via `/files` by referencing the returned `transaction_id`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - category_id
+                - amount
+                - pmt_type
+              properties:
+                property_id:
+                  type: integer
+                  description: Property ID. One of `property_id` or `bank_id` is required. Used to resolve the property's default expense bank account fallback if `bank_id` is missing.
+                bank_id:
+                  type: integer
+                  description: Bank account ID. One of `property_id` or `bank_id` is required. If omitted, API falls back to the property's `default_bank_expense` value when `property_id` is provided.
+                renter_id:
+                  type: integer
+                  description: Optional tenant ID association.
+                category_id:
+                  type: integer
+                  description: Expense category ID.
+                amount:
+                  type: number
+                  format: float
+                  maximum: 9999999.99
+                  description: The expense amount expressed as a positive value. Negative amounts are not allowed. Maximum value is 9999999.99.
+                transaction_time:
+                  type: string
+                  format: date-time
+                  description: "Transaction date and time (format: yyyy-mm-dd hh:ii:ss). Defaults to current time if omitted."
+                memo:
+                  type: string
+                check_num:
+                  type: string
+                pmt_type:
+                  type: string
+                  enum: [CH, PCH, CA, CR, O, ACH]
+                  description: "Payment type: CH (Check), PCH (Print Check), CA (Cash), CR (Credit Card), O (Other), ACH (ACH)."
+      responses:
+        '201':
+          description: Transaction created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    $ref: '#/components/schemas/Transaction'
+        '400':
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /accounts:
+    get:
+      tags:
+        - Accounts
+      summary: List all accounts
+      x-codeSamples:
+        - lang: 'Shell'
+          label: 'cURL'
+          source: |
+            curl -X GET "https://secure.rentecdirect.com/api/v3/accounts" \
+              -H "X-API-Key: YOUR_API_KEY"
+        - lang: 'PHP'
+          source: |
+            <?php
+            $client = new GuzzleHttp\Client();
+            $response = $client->request('GET', 'https://secure.rentecdirect.com/api/v3/accounts', [
+                'headers' => [
+                    'X-API-Key' => 'YOUR_API_KEY',
+                    'Accept' => 'application/json',
+                ],
+            ]);
+            echo $response->getBody();
+        - lang: 'JavaScript'
+          label: 'Node'
+          source: |
+            const axios = require('axios');
+            axios.get('https://secure.rentecdirect.com/api/v3/accounts', {
+                headers: {
+                    'X-API-Key': 'YOUR_API_KEY',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => console.log(response.data))
+            .catch(error => console.error(error));
+        - lang: 'Python'
+          label: 'Python'
+          source: |
+            import requests
+            headers = {
+                'X-API-Key': 'YOUR_API_KEY',
+                'Accept': 'application/json'
+            }
+            response = requests.get('https://secure.rentecdirect.com/api/v3/accounts', headers=headers)
+            print(response.json())
+      parameters:
+        - in: query
+          name: type
+          schema:
+            type: string
+          description: |
+            Filter by one or more account types (comma-separated):
+            - I: Income
+            - E: Expense
+            - O: Other
+            - A: Asset
+            - L: Liability
+            - Q: Equity
+            
+            Example: `type=A,Q` to include only Assets and Equity.
+      responses:
+        '200':
+          description: A list of accounts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Account'
+
+  /accounts/{id}:
+    get:
+      tags:
+        - Accounts
+      summary: Get account details
+      x-codeSamples:
+        - lang: 'Shell'
+          label: 'cURL'
+          source: |
+            curl -X GET "https://secure.rentecdirect.com/api/v3/accounts/1" \
+              -H "X-API-Key: YOUR_API_KEY"
+        - lang: 'PHP'
+          source: |
+            <?php
+            $client = new GuzzleHttp\Client();
+            $response = $client->request('GET', 'https://secure.rentecdirect.com/api/v3/accounts/1', [
+                'headers' => [
+                    'X-API-Key' => 'YOUR_API_KEY',
+                    'Accept' => 'application/json',
+                ],
+            ]);
+            echo $response->getBody();
+        - lang: 'JavaScript'
+          label: 'Node'
+          source: |
+            const axios = require('axios');
+            axios.get('https://secure.rentecdirect.com/api/v3/accounts/1', {
+                headers: {
+                    'X-API-Key': 'YOUR_API_KEY',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => console.log(response.data))
+            .catch(error => console.error(error));
+        - lang: 'Python'
+          label: 'Python'
+          source: |
+            import requests
+            headers = {
+                'X-API-Key': 'YOUR_API_KEY',
+                'Accept': 'application/json'
+            }
+            response = requests.get('https://secure.rentecdirect.com/api/v3/accounts/1', headers=headers)
+            print(response.json())
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Detailed account information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    $ref: '#/components/schemas/Account'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /products:
+    get:
+      tags:
+        - Products
+      summary: List all products
+      x-codeSamples:
+        - lang: 'Shell'
+          label: 'cURL'
+          source: |
+            curl -X GET "https://secure.rentecdirect.com/api/v3/products" \
+              -H "X-API-Key: YOUR_API_KEY"
+        - lang: 'PHP'
+          source: |
+            <?php
+            $client = new GuzzleHttp\Client();
+            $response = $client->request('GET', 'https://secure.rentecdirect.com/api/v3/products', [
+                'headers' => [
+                    'X-API-Key' => 'YOUR_API_KEY',
+                    'Accept' => 'application/json',
+                ],
+            ]);
+            echo $response->getBody();
+        - lang: 'JavaScript'
+          label: 'Node'
+          source: |
+            const axios = require('axios');
+            axios.get('https://secure.rentecdirect.com/api/v3/products', {
+                headers: {
+                    'X-API-Key': 'YOUR_API_KEY',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => console.log(response.data))
+            .catch(error => console.error(error));
+        - lang: 'Python'
+          label: 'Python'
+          source: |
+            import requests
+            headers = {
+                'X-API-Key': 'YOUR_API_KEY',
+                'Accept': 'application/json'
+            }
+            response = requests.get('https://secure.rentecdirect.com/api/v3/products', headers=headers)
+            print(response.json())
+      parameters:
+        - in: query
+          name: archived
+          schema:
+            type: boolean
+          description: Set to true to include archived products. Default is false.
+      responses:
+        '200':
+          description: A list of products
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+
+  /products/{id}:
+    get:
+      tags:
+        - Products
+      summary: Get product details
+      x-codeSamples:
+        - lang: 'Shell'
+          label: 'cURL'
+          source: |
+            curl -X GET "https://secure.rentecdirect.com/api/v3/products/1" \
+              -H "X-API-Key: YOUR_API_KEY"
+        - lang: 'PHP'
+          source: |
+            <?php
+            $client = new GuzzleHttp\Client();
+            $response = $client->request('GET', 'https://secure.rentecdirect.com/api/v3/products/1', [
+                'headers' => [
+                    'X-API-Key' => 'YOUR_API_KEY',
+                    'Accept' => 'application/json',
+                ],
+            ]);
+            echo $response->getBody();
+        - lang: 'JavaScript'
+          label: 'Node'
+          source: |
+            const axios = require('axios');
+            axios.get('https://secure.rentecdirect.com/api/v3/products/1', {
+                headers: {
+                    'X-API-Key': 'YOUR_API_KEY',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => console.log(response.data))
+            .catch(error => console.error(error));
+        - lang: 'Python'
+          label: 'Python'
+          source: |
+            import requests
+            headers = {
+                'X-API-Key': 'YOUR_API_KEY',
+                'Accept': 'application/json'
+            }
+            response = requests.get('https://secure.rentecdirect.com/api/v3/products/1', headers=headers)
+            print(response.json())
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: archived
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Detailed product information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    $ref: '#/components/schemas/Product'
+        '404':
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /banks:
+    get:
+      tags:
+        - Banks
+      summary: List all associated bank accounts
+      parameters:
+        - in: query
+          name: archived
+          description: Whether to include archived bank accounts. If true, both active and archived accounts are returned. Defaults to false (active only).
+          schema:
+            type: boolean
+            default: false
+      x-codeSamples:
+        - lang: 'Shell'
+          label: 'cURL'
+          source: |
+            curl -X GET "https://secure.rentecdirect.com/api/v3/banks" \
+              -H "X-API-Key: YOUR_API_KEY"
+        - lang: 'PHP'
+          source: |
+            <?php
+            $client = new GuzzleHttp\Client();
+            $response = $client->request('GET', 'https://secure.rentecdirect.com/api/v3/banks', [
+                'headers' => [
+                    'X-API-Key' => 'YOUR_API_KEY',
+                    'Accept' => 'application/json',
+                ],
+            ]);
+            echo $response->getBody();
+        - lang: 'JavaScript'
+          label: 'Node'
+          source: |
+            const axios = require('axios');
+            axios.get('https://secure.rentecdirect.com/api/v3/banks', {
+                headers: {
+                    'X-API-Key': 'YOUR_API_KEY',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => console.log(response.data))
+            .catch(error => console.error(error));
+        - lang: 'Python'
+          label: 'Python'
+          source: |
+            import requests
+            headers = {
+                'X-API-Key': 'YOUR_API_KEY',
+                'Accept': 'application/json'
+            }
+            response = requests.get('https://secure.rentecdirect.com/api/v3/banks', headers=headers)
+            print(response.json())
+      responses:
+        '200':
+          description: A list of bank accounts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Bank'
+
+  /banks/{id}:
+    get:
+      tags:
+        - Banks
+      summary: Get bank account details
+      x-codeSamples:
+        - lang: 'Shell'
+          label: 'cURL'
+          source: |
+            curl -X GET "https://secure.rentecdirect.com/api/v3/banks/1" \
+              -H "X-API-Key: YOUR_API_KEY"
+        - lang: 'PHP'
+          source: |
+            <?php
+            $client = new GuzzleHttp\Client();
+            $response = $client->request('GET', 'https://secure.rentecdirect.com/api/v3/banks/1', [
+                'headers' => [
+                    'X-API-Key' => 'YOUR_API_KEY',
+                    'Accept' => 'application/json',
+                ],
+            ]);
+            echo $response->getBody();
+        - lang: 'JavaScript'
+          label: 'Node'
+          source: |
+            const axios = require('axios');
+            axios.get('https://secure.rentecdirect.com/api/v3/banks/1', {
+                headers: {
+                    'X-API-Key': 'YOUR_API_KEY',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => console.log(response.data))
+            .catch(error => console.error(error));
+        - lang: 'Python'
+          label: 'Python'
+          source: |
+            import requests
+            headers = {
+                'X-API-Key': 'YOUR_API_KEY',
+                'Accept': 'application/json'
+            }
+            response = requests.get('https://secure.rentecdirect.com/api/v3/banks/1', headers=headers)
+            print(response.json())
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Bank account details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    $ref: '#/components/schemas/Bank'
+        '404':
+          description: Bank account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /tenants:
+    get:
+      tags:
+        - Tenants
+      summary: List all tenants
+      x-codeSamples:
+        - lang: 'Shell'
+          label: 'cURL'
+          source: |
+            curl -X GET "https://secure.rentecdirect.com/api/v3/tenants?archived=false" \
+              -H "X-API-Key: YOUR_API_KEY"
+        - lang: 'PHP'
+          source: |
+            <?php
+            $client = new GuzzleHttp\Client();
+            $response = $client->request('GET', 'https://secure.rentecdirect.com/api/v3/tenants', [
+                'query' => [
+                    'archived' => 'false'
+                ],
+                'headers' => [
+                    'X-API-Key' => 'YOUR_API_KEY',
+                    'Accept' => 'application/json',
+                ],
+            ]);
+            echo $response->getBody();
+        - lang: 'JavaScript'
+          label: 'Node'
+          source: |
+            const axios = require('axios');
+            axios.get('https://secure.rentecdirect.com/api/v3/tenants', {
+                params: {
+                    archived: false
+                },
+                headers: {
+                    'X-API-Key': 'YOUR_API_KEY',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => console.log(response.data))
+            .catch(error => console.error(error));
+        - lang: 'Python'
+          label: 'Python'
+          source: |
+            import requests
+            params = {'archived': 'false'}
+            headers = {
+                'X-API-Key': 'YOUR_API_KEY',
+                'Accept': 'application/json'
+            }
+            response = requests.get('https://secure.rentecdirect.com/api/v3/tenants', params=params, headers=headers)
+            print(response.json())
+      parameters:
+        - in: query
+          name: archived
+          schema:
+            type: boolean
+          description: Include archived tenants.
+        - in: query
+          name: age
+          schema:
+            type: string
+          description: |
+            Filter tenants by age using a value+unit string.
+            Supported units: d (days), h (hours), m (minutes), s (seconds).
+            Examples: "30d", "12h", "15m", "45s". If no unit is provided, days are assumed.
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+          description: Filter tenants created on or after this date (YYYY-MM-DD).
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+          description: Filter tenants created on or before this date (YYYY-MM-DD).
+        - $ref: '#/components/parameters/data_only'
+      responses:
+        '200':
+          description: A list of tenants
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Tenant'
+
+  /tenants/{id}:
+    get:
+      tags:
+        - Tenants
+      summary: Get tenant details
+      x-codeSamples:
+        - lang: 'Shell'
+          label: 'cURL'
+          source: |
+            curl -X GET "https://secure.rentecdirect.com/api/v3/tenants/456" \
+              -H "X-API-Key: YOUR_API_KEY"
+        - lang: 'PHP'
+          source: |
+            <?php
+            $client = new GuzzleHttp\Client();
+            $response = $client->request('GET', 'https://secure.rentecdirect.com/api/v3/tenants/456', [
+                'headers' => [
+                    'X-API-Key' => 'YOUR_API_KEY',
+                    'Accept' => 'application/json',
+                ],
+            ]);
+            echo $response->getBody();
+        - lang: 'JavaScript'
+          label: 'Node'
+          source: |
+            const axios = require('axios');
+            axios.get('https://secure.rentecdirect.com/api/v3/tenants/456', {
+                headers: {
+                    'X-API-Key': 'YOUR_API_KEY',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => console.log(response.data))
+            .catch(error => console.error(error));
+        - lang: 'Python'
+          label: 'Python'
+          source: |
+            import requests
+            headers = {
+                'X-API-Key': 'YOUR_API_KEY',
+                'Accept': 'application/json'
+            }
+            response = requests.get('https://secure.rentecdirect.com/api/v3/tenants/456', headers=headers)
+            print(response.json())
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: archived
+          schema:
+            type: boolean
+        - in: query
+          name: age
+          schema:
+            type: string
+          description: |
+            Filter tenants by age using a value+unit string.
+            Supported units: d (days), h (hours), m (minutes), s (seconds).
+            Examples: "30d", "12h", "15m", "45s". If no unit is provided, days are assumed.
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+          description: Filter tenants created on or after this date (YYYY-MM-DD).
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+          description: Filter tenants created on or before this date (YYYY-MM-DD).
+        - $ref: '#/components/parameters/data_only'
+      responses:
+        '200':
+          description: Detailed tenant information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    $ref: '#/components/schemas/Tenant'
+        '404':
+          description: Tenant not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too Many Requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /leads:
+    get:
+      tags:
+        - Leads
+      summary: List leads
+      x-codeSamples:
+        - lang: 'Shell'
+          label: 'cURL'
+          source: |
+            curl -X GET "https://secure.rentecdirect.com/api/v3/leads" \
+              -H "X-API-Key: YOUR_API_KEY"
+        - lang: 'PHP'
+          source: |
+            <?php
+            $client = new GuzzleHttp\Client();
+            $response = $client->request('GET', 'https://secure.rentecdirect.com/api/v3/leads', [
+                'headers' => [
+                    'X-API-Key' => 'YOUR_API_KEY',
+                    'Accept' => 'application/json',
+                ],
+            ]);
+            echo $response->getBody();
+        - lang: 'JavaScript'
+          label: 'Node'
+          source: |
+            const axios = require('axios');
+            axios.get('https://secure.rentecdirect.com/api/v3/leads', {
+                headers: {
+                    'X-API-Key': 'YOUR_API_KEY',
+                    'Accept' => 'application/json'
+                }
+            })
+            .then(response => console.log(response.data))
+            .catch(error => console.error(error));
+        - lang: 'Python'
+          label: 'Python'
+          source: |
+            import requests
+            headers = {
+                'X-API-Key': 'YOUR_API_KEY',
+                'Accept' => 'application/json'
+            }
+            response = requests.get('https://secure.rentecdirect.com/api/v3/leads', headers=headers)
+            print(response.json())
+      parameters:
+        - in: query
+          name: archived
+          schema:
+            type: boolean
+          description: Include archived leads.
+        - in: query
+          name: age
+          schema:
+            type: string
+          description: |
+            Filter leads by age using a value+unit string.
+            Supported units: d (days), h (hours), m (minutes), s (seconds).
+            Examples: "30d", "12h", "15m", "45s". If no unit is provided, days are assumed.
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+          description: Filter leads created on or after this date.
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+          description: Filter leads created on or before this date.
+        - $ref: '#/components/parameters/data_only'
+      responses:
+        '200':
+          description: A list of leads
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Lead'
+
+    post:
+      tags:
+        - Leads
+      summary: Create lead
+      x-codeSamples:
+        - lang: 'Shell'
+          label: 'cURL'
+          source: |
+            curl -X POST "https://secure.rentecdirect.com/api/v3/leads" \
+              -H "X-API-Key: YOUR_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "f_name": "John",
+                "l_name": "Doe",
+                "phone": "555-123-4567",
+                "monthly_rent_max": 1500,
+                "search_city": "Grants Pass",
+                "search_state": "OR"
+              }'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - f_name
+                - l_name
+                - monthly_rent_max
+                - search_city
+                - search_state
+              properties:
+                f_name:
+                  type: string
+                l_name:
+                  type: string
+                email:
+                  type: string
+                phone:
+                  type: string
+                  description: Either phone or mphone is required.
+                mphone:
+                  type: string
+                  description: Either phone or mphone is required.
+                monthly_income:
+                  type: number
+                move_in:
+                  type: string
+                  format: date-time
+                monthly_rent_min:
+                  type: number
+                monthly_rent_max:
+                  type: number
+                occupants:
+                  type: integer
+                allow_animals:
+                  type: boolean
+                allow_smokers:
+                  type: boolean
+                fiftyfive_plus:
+                  type: boolean
+                washer_dryer_hookups:
+                  type: boolean
+                wheelchair_access:
+                  type: boolean
+                rental_assistance:
+                  type: boolean
+                no_lease:
+                  type: boolean
+                washer_dryer:
+                  type: boolean
+                bedrooms_min:
+                  type: integer
+                bathrooms_min:
+                  type: integer
+                garage_carport:
+                  type: boolean
+                air_conditioner:
+                  type: boolean
+                search_city:
+                  type: string
+                  description: City name for the search area.
+                search_state:
+                  type: string
+                  description: State abbreviation (e.g. OR, CA).
+                prospect_id:
+                  type: integer
+                  description: Alias of lead_id.
+                search_range:
+                  type: number
+                lead_id:
+                  type: integer
+                  description: Alias of prospect_id for naming convention.
+                notes:
+                  type: string
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    $ref: '#/components/schemas/Lead'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /leads/{id}:
+    get:
+      tags:
+        - Leads
+      summary: Get lead details
+      x-codeSamples:
+        - lang: 'Shell'
+          label: 'cURL'
+          source: |
+            curl -X GET "https://secure.rentecdirect.com/api/v3/leads/123" \
+              -H "X-API-Key: YOUR_API_KEY"
+        - lang: 'PHP'
+          source: |
+            <?php
+            $client = new GuzzleHttp\Client();
+            $response = $client->request('GET', 'https://secure.rentecdirect.com/api/v3/leads/123', [
+                'headers' => [
+                    'X-API-Key' => 'YOUR_API_KEY',
+                    'Accept' => 'application/json',
+                ],
+            ]);
+            echo $response->getBody();
+        - lang: 'JavaScript'
+          label: 'Node'
+          source: |
+            const axios = require('axios');
+            axios.get('https://secure.rentecdirect.com/api/v3/leads/123', {
+                headers: {
+                    'X-API-Key': 'YOUR_API_KEY',
+                    'Accept' => 'application/json'
+                }
+            })
+            .then(response => console.log(response.data))
+            .catch(error => console.error(error));
+        - lang: 'Python'
+          label: 'Python'
+          source: |
+            import requests
+            headers = {
+                'X-API-Key': 'YOUR_API_KEY',
+                'Accept' => 'application/json'
+            }
+            response = requests.get('https://secure.rentecdirect.com/api/v3/leads/123', headers=headers)
+            print(response.json())
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: archived
+          schema:
+            type: boolean
+          description: Include inactive leads.
+        - $ref: '#/components/parameters/data_only'
+      responses:
+        '200':
+          description: Detailed lead information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    $ref: '#/components/schemas/Lead'
+        '404':
+          description: Lead not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too Many Requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /leases:
+    get:
+      tags:
+        - Leases
+      summary: List leases
+      x-codeSamples:
+        - lang: 'Shell'
+          label: 'cURL'
+          source: |
+            curl -X GET "https://secure.rentecdirect.com/api/v3/leases" \
+              -H "X-API-Key: YOUR_API_KEY"
+        - lang: 'PHP'
+          source: |
+            <?php
+            $client = new GuzzleHttp\Client();
+            $response = $client->request('GET', 'https://secure.rentecdirect.com/api/v3/leases', [
+                'headers' => [
+                    'X-API-Key' => 'YOUR_API_KEY',
+                    'Accept' => 'application/json',
+                ],
+            ]);
+            echo $response->getBody();
+        - lang: 'JavaScript'
+          label: 'Node'
+          source: |
+            const axios = require('axios');
+            axios.get('https://secure.rentecdirect.com/api/v3/leases', {
+                headers: {
+                    'X-API-Key': 'YOUR_API_KEY',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => console.log(response.data))
+            .catch(error => console.error(error));
+        - lang: 'Python'
+          label: 'Python'
+          source: |
+            import requests
+            headers = {
+                'X-API-Key': 'YOUR_API_KEY',
+                'Accept': 'application/json'
+            }
+            response = requests.get('https://secure.rentecdirect.com/api/v3/leases', headers=headers)
+            print(response.json())
+      parameters:
+        - in: query
+          name: property_id
+          description: Filter leases by a specific property ID.
+          schema:
+            type: integer
+        - in: query
+          name: renter_id
+          description: Filter leases by a specific tenant (renter) ID.
+          schema:
+            type: integer
+        - in: query
+          name: age
+          schema:
+            type: string
+          description: |
+            Filter leases by age using a value+unit string.
+            Supported units: d (days), m (minutes), s (seconds).
+            Examples: "30d", "15m", "45s". If no unit is provided, days are assumed.
+            This overrides the default behavior of showing only current/future leases.
+        - in: query
+          name: start_date
+          description: Filter leases that started or ended on or after this date (YYYY-MM-DD).
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: end_date
+          description: Filter leases that started or ended on or before this date (YYYY-MM-DD).
+          schema:
+            type: string
+            format: date
+      description: |
+        Returns a list of all leases associated with the authenticated user's account.
+
+        **Default Behavior**: If no `start_date` or `end_date` is provided, the API only returns **current and future leases** (where the move-in date is today or later, or the move-out date is today or later, or there is no move-out date set).
+      responses:
+        '200':
+          description: A list of leases
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Lease'
+
+  /leases/{id}:
+    get:
+      tags:
+        - Leases
+      summary: Lease details
+      x-codeSamples:
+        - lang: 'Shell'
+          label: 'cURL'
+          source: |
+            curl -X GET "https://secure.rentecdirect.com/api/v3/leases/101" \
+              -H "X-API-Key: YOUR_API_KEY"
+        - lang: 'PHP'
+          source: |
+            <?php
+            $client = new GuzzleHttp\Client();
+            $response = $client->request('GET', 'https://secure.rentecdirect.com/api/v3/leases/101', [
+                'headers' => [
+                    'X-API-Key' => 'YOUR_API_KEY',
+                    'Accept' => 'application/json',
+                ],
+            ]);
+            echo $response->getBody();
+        - lang: 'JavaScript'
+          label: 'Node'
+          source: |
+            const axios = require('axios');
+            axios.get('https://secure.rentecdirect.com/api/v3/leases/101', {
+                headers: {
+                    'X-API-Key': 'YOUR_API_KEY',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => console.log(response.data))
+            .catch(error => console.error(error));
+        - lang: 'Python'
+          label: 'Python'
+          source: |
+            import requests
+            headers = {
+                'X-API-Key': 'YOUR_API_KEY',
+                'Accept': 'application/json'
+            }
+            response = requests.get('https://secure.rentecdirect.com/api/v3/leases/101', headers=headers)
+            print(response.json())
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Detailed lease information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    $ref: '#/components/schemas/Lease'
+        '404':
+          description: Lease not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too Many Requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /vendors:
+    get:
+      tags:
+        - Vendors
+      summary: List all vendors
+      x-codeSamples:
+        - lang: 'Shell'
+          label: 'cURL'
+          source: |
+            curl -X GET "https://secure.rentecdirect.com/api/v3/vendors" \
+              -H "X-API-Key: YOUR_API_KEY"
+        - lang: 'PHP'
+          source: |
+            <?php
+            $client = new GuzzleHttp\Client();
+            $response = $client->request('GET', 'https://secure.rentecdirect.com/api/v3/vendors', [
+                'headers' => [
+                    'X-API-Key' => 'YOUR_API_KEY',
+                    'Accept' => 'application/json',
+                ],
+            ]);
+            echo $response->getBody();
+        - lang: 'JavaScript'
+          label: 'Node'
+          source: |
+            const axios = require('axios');
+            axios.get('https://secure.rentecdirect.com/api/v3/vendors', {
+                headers: {
+                    'X-API-Key': 'YOUR_API_KEY',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => console.log(response.data))
+            .catch(error => console.error(error));
+        - lang: 'Python'
+          label: 'Python'
+          source: |
+            import requests
+            headers = {
+                'X-API-Key': 'YOUR_API_KEY',
+                'Accept': 'application/json'
+            }
+            response = requests.get('https://secure.rentecdirect.com/api/v3/vendors', headers=headers)
+            print(response.json())
+      parameters:
+        - in: query
+          name: collected
+          schema:
+            type: boolean
+          description: Set to true to return only collected vendors. Default is false.
+        - in: query
+          name: age
+          schema:
+            type: string
+          description: |
+            Filter vendors by age using a value+unit string.
+            Supported units: d (days), h (hours), m (minutes), s (seconds).
+            Examples: "30d", "12h", "15m", "45s". If no unit is provided, days are assumed.
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+          description: Filter vendors created on or after this date (YYYY-MM-DD).
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+          description: Filter vendors created on or before this date (YYYY-MM-DD).
+        - $ref: '#/components/parameters/data_only'
+      responses:
+        '200':
+          description: A list of vendors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Vendor'
+    post:
+      tags:
+        - Vendors
+      summary: Add a new vendor
+      description: |
+        Adds a new vendor to the system. 
+        
+        **Note:** New vendors will automatically have a default category set to "Repairs". This can be updated by the user by visiting Settings, Vendors in the Rentec Direct interface.
+      x-codeSamples:
+        - lang: 'Shell'
+          label: 'cURL'
+          source: |
+            curl -X POST "https://secure.rentecdirect.com/api/v3/vendors" \
+              -H "X-API-Key: YOUR_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "name": "Quick Fix Plumbing",
+                "industry": "Plumbing",
+                "contact": "John Smith",
+                "email": "john@quickfix.com"
+              }'
+        - lang: 'PHP'
+          source: |
+            <?php
+            $client = new GuzzleHttp\Client();
+            $response = $client->request('POST', 'https://secure.rentecdirect.com/api/v3/vendors', [
+                'headers' => [
+                    'X-API-Key' => 'YOUR_API_KEY',
+                    'Accept' => 'application/json',
+                    'Content-Type' => 'application/json',
+                ],
+                'json' => [
+                    'name' => 'Quick Fix Plumbing',
+                    'industry' => 'Plumbing',
+                    'contact' => 'John Smith',
+                    'email' => 'john@quickfix.com'
+                ]
+            ]);
+            echo $response->getBody();
+        - lang: 'JavaScript'
+          label: 'Node'
+          source: |
+            const axios = require('axios');
+            axios.post('https://secure.rentecdirect.com/api/v3/vendors', {
+                name: 'Quick Fix Plumbing',
+                industry: 'Plumbing',
+                contact: 'John Smith',
+                email: 'john@quickfix.com'
+            }, {
+                headers: {
+                    'X-API-Key': 'YOUR_API_KEY',
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => console.log(response.data))
+            .catch(error => console.error(error));
+        - lang: 'Python'
+          label: 'Python'
+          source: |
+            import requests
+            headers = {
+                'X-API-Key': 'YOUR_API_KEY',
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+            data = {
+                'name': 'Quick Fix Plumbing',
+                'industry': 'Plumbing',
+                'contact': 'John Smith',
+                'email': 'john@quickfix.com'
+            }
+            response = requests.post('https://secure.rentecdirect.com/api/v3/vendors', headers=headers, json=data)
+            print(response.json())
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  description: The name of the vendor.
+                industry:
+                  type: string
+                  description: The industry the vendor belongs to.
+                contact:
+                  type: string
+                  description: The contact person's name.
+                email:
+                  type: string
+                  description: The vendor's email address.
+                address:
+                  type: string
+                  description: The vendor's street address.
+                address2:
+                  type: string
+                  description: The second line of the vendor's address.
+                city:
+                  type: string
+                  description: The vendor's city.
+                state:
+                  type: string
+                  description: The vendor's state abbreviation.
+                zip:
+                  type: string
+                  description: The vendor's zip code.
+                phone:
+                  type: string
+                  description: The vendor's primary phone number.
+                mphone:
+                  type: string
+                  description: The vendor's mobile phone number.
+                rate:
+                  type: string
+                  description: The vendor's hourly rate.
+                notes:
+                  type: string
+                  description: Any notes about the vendor.
+      responses:
+        '201':
+          description: Vendor created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    $ref: '#/components/schemas/Vendor'
+        '400':
+          description: Bad request (missing required fields)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden (insufficient permissions)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too Many Requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /vendors/{id}:
+    get:
+      tags:
+        - Vendors
+      summary: Get vendor details
+      x-codeSamples:
+        - lang: 'Shell'
+          label: 'cURL'
+          source: |
+            curl -X GET "https://secure.rentecdirect.com/api/v3/vendors/1" \
+              -H "X-API-Key: YOUR_API_KEY"
+        - lang: 'PHP'
+          source: |
+            <?php
+            $client = new GuzzleHttp\Client();
+            $response = $client->request('GET', 'https://secure.rentecdirect.com/api/v3/vendors/1', [
+                'headers' => [
+                    'X-API-Key' => 'YOUR_API_KEY',
+                    'Accept' => 'application/json',
+                ],
+            ]);
+            echo $response->getBody();
+        - lang: 'JavaScript'
+          label: 'Node'
+          source: |
+            const axios = require('axios');
+            axios.get('https://secure.rentecdirect.com/api/v3/vendors/1', {
+                headers: {
+                    'X-API-Key': 'YOUR_API_KEY',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => console.log(response.data))
+            .catch(error => console.error(error));
+        - lang: 'Python'
+          label: 'Python'
+          source: |
+            import requests
+            headers = {
+                'X-API-Key': 'YOUR_API_KEY',
+                'Accept': 'application/json'
+            }
+            response = requests.get('https://secure.rentecdirect.com/api/v3/vendors/1', headers=headers)
+            print(response.json())
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: age
+          schema:
+            type: string
+          description: |
+            Filter vendors by age using a value+unit string.
+            Supported units: d (days), h (hours), m (minutes), s (seconds).
+            Examples: "30d", "12h", "15m", "45s". If no unit is provided, days are assumed.
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+          description: Filter vendors created on or after this date (YYYY-MM-DD).
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+          description: Filter vendors created on or before this date (YYYY-MM-DD).
+        - $ref: '#/components/parameters/data_only'
+      responses:
+        '200':
+          description: Detailed vendor information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    $ref: '#/components/schemas/Vendor'
+        '404':
+          description: Vendor not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too Many Requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /messages:
+    get:
+      tags:
+        - Messaging
+      summary: List messages
+      description: Returns a list of messages (emails/communications) for specified entities.
+      parameters:
+        - in: query
+          name: renter_id
+          schema:
+            type: integer
+          description: Tenant (renter) ID.
+        - in: query
+          name: prospect_id
+          schema:
+            type: integer
+          description: Prospect ID.
+        - in: query
+          name: owner_id
+          schema:
+            type: integer
+          description: Owner ID.
+        - in: query
+          name: vendor_id
+          schema:
+            type: integer
+          description: Vendor ID.
+        - in: query
+          name: unread_only
+          schema:
+            type: boolean
+            default: false
+          description: Only return unread messages.
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Page number for pagination.
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+            default: 50
+          description: Number of messages per page.
+        - in: query
+          name: age
+          schema:
+            type: string
+          description: |
+            Filter messages by age using a value+unit string.
+            Supported units: d (days), m (minutes), s (seconds).
+            Examples: "30d", "15m", "45s". If no unit is provided, days are assumed.
+            Only returns messages from the last N units. Sets start_date if not provided.
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+          description: Filter messages starting from this date (YYYY-MM-DD).
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+          description: Filter messages up to this date (YYYY-MM-DD).
+      responses:
+        '200':
+          description: A list of messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Message'
+    post:
+      tags:
+        - Messaging
+      summary: Record a message
+      description: |
+        Inserts a new message (communication record) into the database.
+        
+        Note: At least one of `renter_id`, `prospect_id`, `owner_id`, or `vendor_id` must be provided.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - body
+              properties:
+                subject:
+                  type: string
+                  description: Subject of the message.
+                body:
+                  type: string
+                  description: Content of the message.
+                renter_id:
+                  type: integer
+                prospect_id:
+                  type: integer
+                owner_id:
+                  type: integer
+                vendor_id:
+                  type: integer
+                date:
+                  type: string
+                  format: date
+                  description: Date of the message (YYYY-MM-DD). Defaults to today.
+                time:
+                  type: string
+                  description: Time of the message (HH:MM). Defaults to now.
+                direction:
+                  type: string
+                  enum: [IN, OUT]
+                  default: IN
+                status:
+                  type: string
+                  default: recorded
+      responses:
+        '201':
+          description: Message recorded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    $ref: '#/components/schemas/Message'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /owners:
+    get:
+      tags:
+        - Owners
+      summary: List all owners
+      x-codeSamples:
+        - lang: 'Shell'
+          label: 'cURL'
+          source: |
+            curl -X GET "https://secure.rentecdirect.com/api/v3/owners" \
+              -H "X-API-Key: YOUR_API_KEY"
+        - lang: 'PHP'
+          source: |
+            <?php
+            $client = new GuzzleHttp\Client();
+            $response = $client->request('GET', 'https://secure.rentecdirect.com/api/v3/owners', [
+                'headers' => [
+                    'X-API-Key' => 'YOUR_API_KEY',
+                    'Accept' => 'application/json',
+                ],
+            ]);
+            echo $response->getBody();
+        - lang: 'JavaScript'
+          label: 'Node'
+          source: |
+            const axios = require('axios');
+            axios.get('https://secure.rentecdirect.com/api/v3/owners', {
+                headers: {
+                    'X-API-Key': 'YOUR_API_KEY',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => console.log(response.data))
+            .catch(error => console.error(error));
+        - lang: 'Python'
+          label: 'Python'
+          source: |
+            import requests
+            headers = {
+                'X-API-Key': 'YOUR_API_KEY',
+                'Accept': 'application/json'
+            }
+            response = requests.get('https://secure.rentecdirect.com/api/v3/owners', headers=headers)
+            print(response.json())
+      parameters:
+        - in: query
+          name: archived
+          schema:
+            type: boolean
+          description: Set to true to include archived owners. Default is false.
+        - in: query
+          name: age
+          schema:
+            type: string
+          description: |
+            Filter owners by age using a value+unit string.
+            Supported units: d (days), h (hours), m (minutes), s (seconds).
+            Examples: "30d", "12h", "15m", "45s". If no unit is provided, days are assumed.
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+          description: Filter owners created on or after this date (YYYY-MM-DD).
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+          description: Filter owners created on or before this date (YYYY-MM-DD).
+        - $ref: '#/components/parameters/data_only'
+      responses:
+        '200':
+          description: A list of owners
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Owner'
+
+  /owners/{id}:
+    get:
+      tags:
+        - Owners
+      summary: Get owner details
+      x-codeSamples:
+        - lang: 'Shell'
+          label: 'cURL'
+          source: |
+            curl -X GET "https://secure.rentecdirect.com/api/v3/owners/1" \
+              -H "X-API-Key: YOUR_API_KEY"
+        - lang: 'PHP'
+          source: |
+            <?php
+            $client = new GuzzleHttp\Client();
+            $response = $client->request('GET', 'https://secure.rentecdirect.com/api/v3/owners/1', [
+                'headers' => [
+                    'X-API-Key' => 'YOUR_API_KEY',
+                    'Accept' => 'application/json',
+                ],
+            ]);
+            echo $response->getBody();
+        - lang: 'JavaScript'
+          label: 'Node'
+          source: |
+            const axios = require('axios');
+            axios.get('https://secure.rentecdirect.com/api/v3/owners/1', {
+                headers: {
+                    'X-API-Key': 'YOUR_API_KEY',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => console.log(response.data))
+            .catch(error => console.error(error));
+        - lang: 'Python'
+          label: 'Python'
+          source: |
+            import requests
+            headers = {
+                'X-API-Key': 'YOUR_API_KEY',
+                'Accept': 'application/json'
+            }
+            response = requests.get('https://secure.rentecdirect.com/api/v3/owners/1', headers=headers)
+            print(response.json())
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: age
+          schema:
+            type: string
+          description: |
+            Filter owners by age using a value+unit string.
+            Supported units: d (days), h (hours), m (minutes), s (seconds).
+            Examples: "30d", "12h", "15m", "45s". If no unit is provided, days are assumed.
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+          description: Filter owners created on or after this date (YYYY-MM-DD).
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+          description: Filter owners created on or before this date (YYYY-MM-DD).
+        - $ref: '#/components/parameters/data_only'
+      responses:
+        '200':
+          description: Detailed owner information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    $ref: '#/components/schemas/Owner'
+        '404':
+          description: Owner not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too Many Requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /work_orders:
+    get:
+      tags:
+        - Work Orders
+      summary: List all Work Orders
+      x-codeSamples:
+        - lang: 'Shell'
+          label: 'cURL'
+          source: |
+            curl -X GET "https://secure.rentecdirect.com/api/v3/work_orders?status=Open" \
+              -H "X-API-Key: YOUR_API_KEY"
+        - lang: 'PHP'
+          source: |
+            <?php
+            $client = new GuzzleHttp\Client();
+            $response = $client->request('GET', 'https://secure.rentecdirect.com/api/v3/work_orders', [
+                'query' => [
+                    'status' => 'Open'
+                ],
+                'headers' => [
+                    'X-API-Key' => 'YOUR_API_KEY',
+                    'Accept' => 'application/json',
+                ],
+            ]);
+            echo $response->getBody();
+        - lang: 'JavaScript'
+          label: 'Node'
+          source: |
+            const axios = require('axios');
+            axios.get('https://secure.rentecdirect.com/api/v3/work_orders', {
+                params: {
+                    status: 'Open'
+                },
+                headers: {
+                    'X-API-Key': 'YOUR_API_KEY',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => console.log(response.data))
+            .catch(error => console.error(error));
+        - lang: 'Python'
+          label: 'Python'
+          source: |
+            import requests
+            params = {'status': 'Open'}
+            headers = {
+                'X-API-Key': 'YOUR_API_KEY',
+                'Accept': 'application/json'
+            }
+            response = requests.get('https://secure.rentecdirect.com/api/v3/work_orders', params=params, headers=headers)
+            print(response.json())
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [OpenU, OpenA, Unassigned, Assigned, Parts, Work, Finalized, Closed]
+          description: |
+            Filter by Work Order status.
+            - OpenU: Unassigned
+            - OpenA: Assigned
+            - Parts: Parts on Order
+            - Work: Work in Progress
+            - Finalized: Finalized
+            - Closed: Closed
+            - Unassigned: (alias for OpenU)
+            - Assigned: (alias for OpenA)
+        - in: query
+          name: property_id
+          schema:
+            type: integer
+          description: Filter by property ID.
+        - in: query
+          name: age
+          schema:
+            type: string
+          description: |
+            Filter Work Orders by age using a value+unit string.
+            Supported units: d (days), h (hours), m (minutes), s (seconds).
+            Examples: "30d", "12h", "15m", "45s". If no unit is provided, days are assumed.
+            Number of units to look back from today (filters by date_received). Default is 365 days.
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+          description: Filter Work Orders created or received on or after this date (YYYY-MM-DD).
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+          description: Filter Work Orders created or received on or before this date (YYYY-MM-DD).
+        - in: query
+          name: archived
+          schema:
+            type: boolean
+          description: Include archived Work Orders. Default is false.
+      responses:
+        '200':
+          description: A list of Work Orders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WorkOrder'
+    post:
+      tags:
+        - Work Orders
+      summary: Create a new Work Order
+      x-codeSamples:
+        - lang: 'Shell'
+          label: 'cURL'
+          source: |
+            curl -X POST "https://secure.rentecdirect.com/api/v3/work_orders" \
+              -H "X-API-Key: YOUR_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "property_id": 123,
+                "short_desc": "Leaking Faucet",
+                "description": "The kitchen faucet is leaking.",
+                "status": "OpenU",
+                "priority": 2
+              }'
+        - lang: 'PHP'
+          source: |
+            <?php
+            $client = new GuzzleHttp\Client();
+            $response = $client->request('POST', 'https://secure.rentecdirect.com/api/v3/work_orders', [
+                'headers' => [
+                    'X-API-Key' => 'YOUR_API_KEY',
+                    'Accept' => 'application/json',
+                    'Content-Type' => 'application/json',
+                ],
+                'json' => [
+                    'property_id' => 123,
+                    'short_desc' => 'Leaking Faucet',
+                    'description' => 'The kitchen faucet is leaking.',
+                    'status' => 'OpenU',
+                    'priority' => 2
+                ]
+            ]);
+            echo $response->getBody();
+        - lang: 'JavaScript'
+          label: 'Node'
+          source: |
+            const axios = require('axios');
+            axios.post('https://secure.rentecdirect.com/api/v3/work_orders', {
+                property_id: 123,
+                short_desc: 'Leaking Faucet',
+                description: 'The kitchen faucet is leaking.',
+                status: 'OpenU',
+                priority: 2
+            }, {
+                headers: {
+                    'X-API-Key': 'YOUR_API_KEY',
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => console.log(response.data))
+            .catch(error => console.error(error));
+        - lang: 'Python'
+          label: 'Python'
+          source: |
+            import requests
+            data = {
+                'property_id': 123,
+                'short_desc': 'Leaking Faucet',
+                'description': 'The kitchen faucet is leaking.',
+                'status': 'OpenU',
+                'priority': 2
+            }
+            headers = {
+                'X-API-Key': 'YOUR_API_KEY',
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+            response = requests.post('https://secure.rentecdirect.com/api/v3/work_orders', json=data, headers=headers)
+            print(response.json())
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - property_id
+                - short_desc
+              properties:
+                property_id:
+                  type: integer
+                renter_id:
+                  type: integer
+                contact_renter_id:
+                  type: integer
+                vendor_id:
+                  type: integer
+                short_desc:
+                  type: string
+                  maxLength: 100
+                description:
+                  type: string
+                status:
+                  type: string
+                  enum: [OpenU, OpenA, Parts, Work, Finalized, Closed, Unassigned, Assigned]
+                  description: |
+                    The status of the Work Order.
+                    - OpenU: Unassigned
+                    - OpenA: Assigned
+                    - Parts: Parts on Order
+                    - Work: Work in Progress
+                    - Finalized: Finalized
+                    - Closed: Closed
+                    - Unassigned: (alias for OpenU)
+                    - Assigned: (alias for OpenA)
+                priority:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                  description: Priority level (1-5)
+                date_received:
+                  type: string
+                  format: date
+                date_assigned:
+                  type: string
+                  format: date
+                date_resolved:
+                  type: string
+                  format: date
+                cost:
+                  type: number
+                tenant_view:
+                  type: boolean
+                owner_view:
+                  type: boolean
+                private_notes:
+                  type: string
+                email_manager:
+                  type: boolean
+      responses:
+        '201':
+          description: Work Order created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    $ref: '#/components/schemas/WorkOrder'
+        '200':
+          description: OK - Duplicate Work Order already exists
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/WorkOrder'
+                  - type: object
+                    properties:
+                      duplicate:
+                        type: boolean
+        '400':
+          description: Invalid input or validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Property, Renter, or Vendor not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /work_orders/{id}:
+    get:
+      tags:
+        - Work Orders
+      summary: Get Work Order details
+      x-codeSamples:
+        - lang: 'Shell'
+          label: 'cURL'
+          source: |
+            curl -X GET "https://secure.rentecdirect.com/api/v3/work_orders/1" \
+              -H "X-API-Key: YOUR_API_KEY"
+        - lang: 'PHP'
+          source: |
+            <?php
+            $client = new GuzzleHttp\Client();
+            $response = $client->request('GET', 'https://secure.rentecdirect.com/api/v3/work_orders/1', [
+                'headers' => [
+                    'X-API-Key' => 'YOUR_API_KEY',
+                    'Accept' => 'application/json',
+                ],
+            ]);
+            echo $response->getBody();
+        - lang: 'JavaScript'
+          label: 'Node'
+          source: |
+            const axios = require('axios');
+            axios.get('https://secure.rentecdirect.com/api/v3/work_orders/1', {
+                headers: {
+                    'X-API-Key': 'YOUR_API_KEY',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => console.log(response.data))
+            .catch(error => console.error(error));
+        - lang: 'Python'
+          label: 'Python'
+          source: |
+            import requests
+            headers = {
+                'X-API-Key': 'YOUR_API_KEY',
+                'Accept': 'application/json'
+            }
+            response = requests.get('https://secure.rentecdirect.com/api/v3/work_orders/1', headers=headers)
+            print(response.json())
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: archived
+          schema:
+            type: boolean
+          description: Set to true to allow retrieving the Work Order even if it is archived. Default is false.
+      responses:
+        '200':
+          description: Detailed Work Order information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    $ref: '#/components/schemas/WorkOrder'
+        '404':
+          description: Work Order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too Many Requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /work_orders/{id}/notes:
+    post:
+      tags:
+        - Work Orders
+      summary: Add a note to a Work Order
+      x-codeSamples:
+        - lang: 'Shell'
+          label: 'cURL'
+          source: |
+            curl -X POST "https://secure.rentecdirect.com/api/v3/work_orders/1/notes" \
+              -H "X-API-Key: YOUR_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "note": "Called the vendor, they are on their way.",
+                "private": true
+              }'
+        - lang: 'PHP'
+          source: |
+            <?php
+            $client = new GuzzleHttp\Client();
+            $response = $client->request('POST', 'https://secure.rentecdirect.com/api/v3/work_orders/1/notes', [
+                'headers' => [
+                    'X-API-Key' => 'YOUR_API_KEY',
+                    'Accept' => 'application/json',
+                    'Content-Type' => 'application/json',
+                ],
+                'json' => [
+                    'note' => 'Called the vendor, they are on their way.',
+                    'private' => true
+                ]
+            ]);
+            echo $response->getBody();
+        - lang: 'JavaScript'
+          label: 'Node'
+          source: |
+            const axios = require('axios');
+            axios.post('https://secure.rentecdirect.com/api/v3/work_orders/1/notes', {
+                note: 'Called the vendor, they are on their way.',
+                private: true
+            }, {
+                headers: {
+                    'X-API-Key': 'YOUR_API_KEY',
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => console.log(response.data))
+            .catch(error => console.error(error));
+        - lang: 'Python'
+          label: 'Python'
+          source: |
+            import requests
+            data = {
+                'note': 'Called the vendor, they are on their way.',
+                'private': True
+            }
+            headers = {
+                'X-API-Key': 'YOUR_API_KEY',
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+            response = requests.post('https://secure.rentecdirect.com/api/v3/work_orders/1/notes', json=data, headers=headers)
+            print(response.json())
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - note
+              properties:
+                note:
+                  type: string
+                private:
+                  type: boolean
+                  default: true
+                  description: Whether the note is private (only visible to management).
+      responses:
+        '201':
+          description: Note added successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    $ref: '#/components/schemas/WorkOrderNote'
+        '200':
+          description: OK - Duplicate note already exists
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/Summary'
+                  data:
+                    allOf:
+                      - $ref: '#/components/schemas/WorkOrderNote'
+                      - type: object
+                        properties:
+                          duplicate:
+                            type: boolean
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Workorder not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too Many Requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
